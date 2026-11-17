@@ -120,3 +120,28 @@ test('у агентов есть инструмент вопроса дирек�
   const { toolsFor } = await import('../src/agent.js');
   assert.ok(toolsFor({ id: 'mk_head', dept: 'marketing' }).some((t) => t.name === 'ask_director'));
 });
+
+test('офис: кто работает, кто в очереди, кто свободен, кто на совещании', async () => {
+  const app = makeApp();
+  const { db } = app;
+  db.run('DELETE FROM tasks');
+  db.run(`INSERT INTO tasks(title,agent_id,dept,status,started_at) VALUES('ИИ-ядро MVP','ap_llm','ai_product','running',datetime('now'))`);
+  db.run(`INSERT INTO tasks(title,agent_id,dept,status) VALUES('Лендинг','ap_design','ai_product','queued')`);
+  createMeeting(app, { agenda: 'Итоги недели', participants: ['coo', 'cdo'] });
+  const srv = app.http.listen(0); await new Promise((r) => srv.once('listening', r));
+  try {
+    const H = { Authorization: 'Bearer test-director-token-0123456789' };
+    const o = await (await fetch(`http://127.0.0.1:${srv.address().port}/api/office`, { headers: H })).json();
+    const by = Object.fromEntries(o.agents.map((a) => [a.id, a]));
+    assert.equal(by.ap_llm.state, 'work'); assert.equal(by.ap_llm.current, 'ИИ-ядро MVP');
+    assert.equal(by.ap_design.state, 'queue');
+    assert.equal(by.mk_head.state, 'idle');
+    assert.equal(by.coo.state, 'queue', 'доклад на совещание в очереди');
+    assert.deepEqual(o.meeting.participants, ['coo', 'cdo']);
+    assert.ok(o.depts.some((d) => d.key === 'ai_product'));
+    assert.ok(o.agents.length > 0 && o.agents.every((a) => a.enabled === 1), 'выключенные сотрудники в офисе не показываются');
+    assert.ok(db.get('SELECT COUNT(*) n FROM agents WHERE enabled=0').n > 0);
+    const t = await (await fetch(`http://127.0.0.1:${srv.address().port}/api/agents/ap_llm/tasks`, { headers: H })).json();
+    assert.equal(t[0].title, 'ИИ-ядро MVP');
+  } finally { srv.close(); }
+});

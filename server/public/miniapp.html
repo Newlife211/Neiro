@@ -10,6 +10,7 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--t);font:14px/1.45 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;overflow:hidden}
 #app{display:flex;flex-direction:column;height:100%}
+#app[hidden]{display:none}
 .top{display:flex;align-items:center;gap:8px;padding:10px 14px 6px}
 .top .t1{font-weight:800;letter-spacing:.14em;font-size:11px;color:var(--gold)}
 .top .t2{font-size:12px;color:var(--m)}
@@ -61,13 +62,22 @@ pre{white-space:pre-wrap;font:13px/1.5 -apple-system,system-ui,sans-serif;margin
 .chip.on{border-color:#7a6220;background:#3a3220;color:var(--y)}
 #login{position:fixed;inset:0;z-index:9;background:var(--bg);display:none;align-items:center;justify-content:center;padding:24px}
 #login .card{max-width:380px;width:100%}
+.office{position:fixed;inset:0;display:flex;flex-direction:column;background:radial-gradient(ellipse at 50% 30%,#18202c,#0a0d12 75%)}
+.office[hidden]{display:none}
+.oh{display:flex;align-items:center;gap:8px;padding:10px 12px 6px}
+.oh h3{margin:0;font-size:16px}
+#oStats{display:flex;gap:6px;flex-wrap:wrap;padding:0 12px 6px}
+#iso{flex:1;width:100%;touch-action:none;display:block}
+.ohint{position:absolute;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom));text-align:center;color:var(--m);font-size:11px;pointer-events:none}
+.ofit{position:absolute;right:12px;bottom:calc(30px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:6px}
+.ofit button{width:40px;height:40px;border-radius:20px;background:var(--p);border:1px solid var(--l);color:var(--t);font-size:18px}
 .toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:var(--p2);border:1px solid var(--l);padding:8px 14px;border-radius:12px;z-index:10;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.on{opacity:1}
 </style>
 </head>
 <body>
 <div id="app">
-  <div class="top"><div><div class="t1">НЕЙРОСФЕРА</div><div class="t2">Кабинет директора</div></div><span class="sp"></span><span id="clock" class="pill">--:--</span><span id="stopPill" class="pill">работаем</span></div>
+  <div class="top"><div><div class="t1">НЕЙРОСФЕРА</div><div class="t2">Кабинет директора</div></div><span class="sp"></span><button class="pill" style="border:1px solid #7a6220;background:#3a3220;color:#ffd166;font-weight:700" onclick="enterOffice()">🚪 В офис</button><span id="clock" class="pill">--:--</span><span id="stopPill" class="pill">работаем</span></div>
   <div class="scene">
   <svg id="desk" viewBox="0 -150 400 650" preserveAspectRatio="xMidYMax meet" aria-label="Рабочий стол директора">
     <defs>
@@ -114,6 +124,15 @@ pre{white-space:pre-wrap;font:13px/1.5 -apple-system,system-ui,sans-serif;margin
       <text class="lbl" x="35" y="120">Команда</text>
     </g>
 
+    <!-- дверь в офис -->
+    <g class="obj" onclick="enterOffice()">
+      <rect x="346" y="20" width="50" height="232" fill="#2a1f16"/>
+      <rect x="350" y="24" width="42" height="228" fill="#5a3c25"/>
+      <rect x="355" y="32" width="32" height="70" rx="2" fill="#4a3220"/><rect x="355" y="112" width="32" height="120" rx="2" fill="#4a3220"/>
+      <rect x="358" y="36" width="26" height="40" fill="#9cc7e8" opacity=".35"/>
+      <circle cx="356" cy="150" r="3" fill="#d4a72c"/>
+      <rect x="350" y="6" width="42" height="12" rx="2" fill="#123b24"/><text x="371" y="15" font-size="7" font-weight="800" fill="#3ddc97" text-anchor="middle">ОФИС</text>
+    </g>
     <!-- растение -->
     <g opacity=".95">
       <path d="M352 228 q-14 -40 -2 -70 q6 30 4 70z" fill="#2f7d4f"/><path d="M356 228 q10 -46 30 -58 q-12 34 -24 60z" fill="#3a9a5f"/>
@@ -262,6 +281,13 @@ pre{white-space:pre-wrap;font:13px/1.5 -apple-system,system-ui,sans-serif;margin
   </div>
 </div>
 
+<div class="office" id="office" hidden>
+  <div class="oh"><button class="btn" onclick="leaveOffice()">← Кабинет</button><h3>Офис</h3><span class="sp2"></span><span class="note">вид сверху</span></div>
+  <div id="oStats"></div>
+  <canvas id="iso"></canvas>
+  <div class="ofit"><button onclick="zoomAt(innerWidth/2,innerHeight/2,Math.min(2.5,O.cam.s*1.25))">＋</button><button onclick="zoomAt(innerWidth/2,innerHeight/2,Math.max(0.3,O.cam.s*0.8))">－</button><button onclick="fitOffice()">⤢</button></div>
+  <div class="ohint">Листайте пальцем, щипок — масштаб. Нажмите на сотрудника или отдел.</div>
+</div>
 <div class="sheet" id="sheet"><div class="shade" data-close></div><div class="panel"><div class="grab"></div><div class="ph"><h3 id="sh-title"></h3><button class="x" data-close>✕</button></div><div class="pc" id="sh-body"></div></div></div>
 <div id="login"><div class="card"><h3 style="margin-top:0">Кабинет директора</h3><p class="note">Откройте кабинет из Telegram-бота компании. Для входа из браузера введите токен директора.</p><input id="tok" type="password" placeholder="DIRECTOR_TOKEN"><button class="btn gold full" id="loginBtn">Войти</button></div></div>
 <div class="toast" id="toast"></div>
@@ -332,7 +358,7 @@ async function refresh() {
   $('#stopPill').textContent = ov.stopped ? 'СТОП' : ov.paused ? 'пауза' : 'работаем'; $('#stopPill').className = 'pill' + (ov.stopped ? ' stop' : '');
   $('#stopLbl').textContent = ov.stopped ? 'Снять СТОП' : 'СТОП'; $('#stopTxt').textContent = ov.stopped ? 'ВКЛ' : 'СТОП';
   $('#calcTxt').textContent = (ov.revenue_24h >= 0 ? '+' : '') + Math.round(ov.revenue_24h) + ' ' + ov.base;
-  if (current) openSheet(current, true);
+  if (current && V[current]) openSheet(current, true);
 }
 
 // ---------- шторка ----------
@@ -346,10 +372,10 @@ async function openSheet(key, silent) {
   if (silent && document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   try { $('#sh-body').innerHTML = await V[key](); } catch (e) { if (e.message !== 'auth') $('#sh-body').innerHTML = `<div class="card">Ошибка: ${esc(e.message)}</div>`; }
 }
-function closeSheet() { current = null; $('#sheet').classList.remove('open'); if (tg) tg.BackButton.hide(); }
+function closeSheet() { current = null; O.sel = null; $('#sheet').classList.remove('open'); if (tg && document.getElementById('office').hidden) tg.BackButton.hide(); }
 document.querySelectorAll('[data-close]').forEach((e) => (e.onclick = closeSheet));
 document.querySelectorAll('[data-go]').forEach((e) => (e.onclick = () => openSheet(e.dataset.go)));
-if (tg) tg.BackButton.onClick(closeSheet);
+if (tg) tg.BackButton.onClick(() => { if ($('#sheet').classList.contains('open')) closeSheet(); else if (!document.getElementById('office').hidden) leaveOffice(); });
 
 async function toggleStop() {
   haptic('heavy');
@@ -445,6 +471,249 @@ async function newMeeting() { const a = $('#mAgenda').value.trim(); if (!a) retu
 async function radarNow() { const r = await post('/api/radar/collect'); toast(`Новых находок: ${r.github + r.hn + r.rss}`); refresh(); }
 async function rtx(id, as) { await post(`/api/bank/${id}/resolve`, { as }); toast('Готово'); refresh(); }
 async function agSet(id, on) { await api('/api/agents/' + id, { method: 'PATCH', body: JSON.stringify({ enabled: on }) }); toast(on ? 'В штате' : 'Выведен из штата'); }
+
+// ================= ОФИС: изометрический 3D-вид сверху =================
+const DCOL = {"admin":"#d4a72c","analytics":"#4f7cff","rnd":"#a855f7","marketing":"#ec4899","sales":"#22c55e","clients":"#14b8a6","quality":"#f97316","security":"#64748b","it":"#3b82f6","support":"#06b6d4","accounting":"#eab308","legal":"#94a3b8","hr":"#f43f5e","crypto_desk":"#f7931a","crypto_quant":"#8b5cf6","crypto_research":"#10b981","crypto_risk":"#ef4444","crypto_treasury":"#facc15","crypto_compliance":"#60a5fa","ai_product":"#e879f9","tech_radar":"#22d3ee"};
+const SKIN = ['#f1c7a5', '#e0ac85', '#c98e66', '#f5d3b8', '#d9a07a'], HAIR = ['#2b2018', '#5a3a22', '#1c1c1c', '#8a5a2b', '#c9a227', '#3b2a20'];
+const TW = 48, TH = 24, ZH = 26;
+const O = { data: null, rooms: [], people: new Map(), cam: { x: 0, y: 0, s: 1 }, fitted: false, raf: 0, timer: 0, sel: null, t: 0 };
+const cv = () => document.getElementById('iso');
+const hash = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
+const shade = (hex, k) => { const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255; r = Math.max(0, Math.min(255, r * k)); g = Math.max(0, Math.min(255, g * k)); b = Math.max(0, Math.min(255, b * k)); return `rgb(${r | 0},${g | 0},${b | 0})`; };
+function iso(x, y, z = 0) { const c = O.cam; return [((x - y) * TW / 2) * c.s + c.x, ((x + y) * TH / 2 - z * ZH) * c.s + c.y]; }
+
+function layout(d) {
+  const rooms = [];
+  const special = [{ key: '_director', name: 'Ваш кабинет', col: '#d4a72c', n: 1 }, { key: '_meeting', name: 'Переговорная', col: '#8d98aa', n: 0 }, { key: '_kitchen', name: 'Кухня и лаунж', col: '#3ddc97', n: 0 }];
+  const depts = d.depts.map((x) => ({ key: x.key, name: x.name, col: DCOL[x.key] || '#5aa9ff', n: d.agents.filter((a) => a.dept === x.key).length }));
+  const adminIdx = depts.findIndex((x) => x.key === 'admin');
+  const admin = adminIdx >= 0 ? depts.splice(adminIdx, 1) : [];
+  const list = [special[0], special[1], special[2], ...admin, ...depts];
+  // Сетка повёрнута на 45°: в изометрии комнаты встают в две колонки по экрану —
+  // офис помещается по ширине телефона и листается вниз.
+  const D = 10.4;
+  list.forEach((r, k) => {
+    const i = k % 2, j = Math.floor(k / 2);
+    const rows = Math.max(1, Math.ceil(r.n / 3));
+    const w = r.key === '_meeting' ? 9 : 7, h = r.key === '_kitchen' || r.key === '_meeting' ? 6 : Math.min(7.4, Math.max(5, 2.6 + rows * 2.2));
+    rooms.push({ ...r, x: (j + i) * D, y: (j - i) * D, w, h });
+  });
+  O.rooms = rooms;
+  // места: стол каждого сотрудника и точки на кухне
+  const kitchen = rooms.find((r) => r.key === '_kitchen');
+  for (const r of rooms) {
+    const staff = d.agents.filter((a) => a.dept === r.key);
+    staff.forEach((a, i) => { a._desk = { x: r.x + 1.4 + (i % 3) * 2.1, y: r.y + 1.7 + Math.floor(i / 3) * 2.2 }; });
+  }
+  const meetingRoom = rooms.find((r) => r.key === '_meeting');
+  const parts = d.meeting ? d.meeting.participants : [];
+  d.agents.forEach((a, i) => {
+    a._kitchen = { x: kitchen.x + 1.2 + ((hash(a.id) % 50) / 50) * (kitchen.w - 2.4), y: kitchen.y + 1.4 + ((hash(a.id + 'y') % 40) / 40) * (kitchen.h - 2.6) };
+    const inMeeting = d.meeting && d.meeting.status === 'collecting' && parts.includes(a.id) && a.state !== 'work';
+    const k = parts.indexOf(a.id);
+    a._target = a.state === 'idle' && !inMeeting ? a._kitchen : inMeeting ? { x: meetingRoom.x + 1.4 + (k % 6) * 1.25, y: meetingRoom.y + (k < 6 ? 1.6 : 4.3) } : { x: a._desk.x + 0.15, y: a._desk.y + 0.75 };
+    a._where = inMeeting ? 'meeting' : a.state === 'idle' ? 'kitchen' : 'desk';
+  });
+}
+
+async function loadOffice() {
+  let d; try { d = await api('/api/office'); } catch (e) { return; }
+  O.data = d; layout(d);
+  for (const a of d.agents) {
+    const p = O.people.get(a.id) || { x: a._target.x, y: a._target.y, phase: Math.random() * 6 };
+    p.a = a; p.tx = a._target.x; p.ty = a._target.y; O.people.set(a.id, p);
+  }
+  for (const id of [...O.people.keys()]) if (!d.agents.some((a) => a.id === id)) O.people.delete(id);
+  $('#oStats').innerHTML = `<span class="st g">⌨ работают ${d.stats.work}</span><span class="st w">⏳ в очереди ${d.stats.queue}</span><span class="st">☕ свободны ${d.stats.idle}</span>${d.stopped ? '<span class="st r">СТОП</span>' : d.paused ? '<span class="st w">пауза</span>' : ''}`;
+  if (!O.fitted) fitOffice();
+  if (O.sel && current === 'agent') openAgent(O.sel, true);
+}
+
+function fitOffice() {
+  const c = cv(); const W = c.clientWidth, H = c.clientHeight;
+  O.cam = { x: 0, y: 0, s: 1 };
+  let minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+  for (const r of O.rooms) for (const [px, py] of [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]]) { const [sx, sy] = iso(px, py); minx = Math.min(minx, sx); maxx = Math.max(maxx, sx); miny = Math.min(miny, sy - 40); maxy = Math.max(maxy, sy); }
+  O.cam.s = Math.max(0.3, Math.min(1.4, W / (maxx - minx + 16))); // по ширине экрана, вниз — листать
+  O.cam.x = W / 2 - ((minx + maxx) / 2) * O.cam.s; O.cam.y = 24 - miny * O.cam.s;
+  O.fitted = true;
+}
+
+function poly(ctx, pts, fill, stroke) { ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); } }
+function box(ctx, x, y, w, d, z0, h, col) { // изометрический параллелепипед
+  const A = iso(x, y, z0 + h), B = iso(x + w, y, z0 + h), C = iso(x + w, y + d, z0 + h), D = iso(x, y + d, z0 + h);
+  const B0 = iso(x + w, y, z0), C0 = iso(x + w, y + d, z0), D0 = iso(x, y + d, z0);
+  poly(ctx, [D, C, C0, D0], shade(col, 0.72)); poly(ctx, [B, C, C0, B0], shade(col, 0.55)); poly(ctx, [A, B, C, D], col);
+}
+
+function drawRoom(ctx, r) {
+  const col = r.col, base = '#1a2130';
+  poly(ctx, [iso(r.x, r.y), iso(r.x + r.w, r.y), iso(r.x + r.w, r.y + r.h), iso(r.x, r.y + r.h)], shade(col, 0.22), null);
+  ctx.globalAlpha = 0.12; ctx.strokeStyle = col; ctx.lineWidth = 1;
+  for (let i = 1; i < r.w; i++) { const a = iso(r.x + i, r.y), b = iso(r.x + i, r.y + r.h); ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); }
+  for (let j = 1; j < r.h; j++) { const a = iso(r.x, r.y + j), b = iso(r.x + r.w, r.y + j); ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+  const WH = 1.1; // задние стены
+  poly(ctx, [iso(r.x, r.y, 0), iso(r.x + r.w, r.y, 0), iso(r.x + r.w, r.y, WH), iso(r.x, r.y, WH)], shade(base, 1.25));
+  poly(ctx, [iso(r.x, r.y, 0), iso(r.x, r.y + r.h, 0), iso(r.x, r.y + r.h, WH), iso(r.x, r.y, WH)], shade(base, 0.95));
+  poly(ctx, [iso(r.x, r.y, WH), iso(r.x + r.w, r.y, WH), iso(r.x + r.w, r.y, WH + 0.06), iso(r.x, r.y, WH + 0.06)], col);
+  poly(ctx, [iso(r.x, r.y, WH), iso(r.x, r.y + r.h, WH), iso(r.x, r.y + r.h, WH + 0.06), iso(r.x, r.y, WH + 0.06)], shade(col, 0.8));
+  // табличка с названием на задней стене
+  const [lx, ly] = iso(r.x + r.w / 2, r.y, 0.62);
+  ctx.save(); ctx.translate(lx, ly); ctx.transform(1, 0.5, 0, 1, 0, 0);
+  ctx.font = `700 ${Math.max(8, 11 * O.cam.s)}px -apple-system,system-ui,sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = col; ctx.fillText(r.name.length > 24 ? r.name.slice(0, 23) + '…' : r.name, 0, 0); ctx.restore();
+}
+
+function drawDesk(ctx, x, y, col, on) {
+  box(ctx, x - 0.55, y - 0.3, 1.1, 0.6, 0.38, 0.06, '#6e4a2e');
+  box(ctx, x - 0.5, y - 0.25, 0.08, 0.08, 0, 0.38, '#3b2a1d'); box(ctx, x + 0.42, y - 0.25, 0.08, 0.08, 0, 0.38, '#3b2a1d');
+  box(ctx, x - 0.25, y - 0.24, 0.5, 0.06, 0.44, 0.34, '#11161e');
+  if (on) { const a = iso(x - 0.21, y - 0.18, 0.48), b = iso(x + 0.21, y - 0.18, 0.48), c = iso(x + 0.21, y - 0.18, 0.74), d = iso(x - 0.21, y - 0.18, 0.74); poly(ctx, [a, b, c, d], shade(col, 1.1)); }
+}
+
+function drawPerson(ctx, p, t) {
+  const a = p.a, col = DCOL[a.dept] || '#5aa9ff', s = O.cam.s;
+  const moving = Math.hypot(p.tx - p.x, p.ty - p.y) > 0.05;
+  const bob = moving ? Math.abs(Math.sin(t * 9 + p.phase)) * 0.08 : a.state === 'work' ? Math.sin(t * 14 + p.phase) * 0.015 : 0;
+  const [sx, sy] = iso(p.x, p.y, 0);
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(sx, sy, 9 * s, 4.5 * s, 0, 0, 7); ctx.fill();
+  const [bx, by] = iso(p.x, p.y, 0.62 + bob);
+  ctx.fillStyle = shade(col, 0.85); ctx.beginPath(); ctx.roundRect(bx - 7 * s, by, 14 * s, 15 * s, 5 * s); ctx.fill(); // тело
+  ctx.fillStyle = '#2a313d'; ctx.fillRect(bx - 6 * s, by + 14 * s, 5 * s, 6 * s); ctx.fillRect(bx + 1 * s, by + 14 * s, 5 * s, 6 * s);
+  const h = hash(a.id); const [hx, hy] = iso(p.x, p.y, 0.95 + bob);
+  ctx.fillStyle = SKIN[h % SKIN.length]; ctx.beginPath(); ctx.arc(hx, hy, 6.5 * s, 0, 7); ctx.fill();
+  ctx.fillStyle = HAIR[(h >> 3) % HAIR.length]; ctx.beginPath(); ctx.arc(hx, hy - 1.5 * s, 6.6 * s, Math.PI, 0); ctx.fill();
+  if (a.head) { ctx.fillStyle = '#d4a72c'; ctx.beginPath(); ctx.arc(hx + 6 * s, hy - 7 * s, 2.2 * s, 0, 7); ctx.fill(); }
+  if (O.sel === a.id) { ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(sx, sy, 13 * s, 6.5 * s, 0, 0, 7); ctx.stroke(); }
+  p._hit = [hx, hy + 10 * s];
+  // пузырь: чем занят
+  const icon = a._where === 'meeting' ? '📣' : a.state === 'work' ? '⌨' : a.state === 'queue' ? '⏳' : a.state === 'pause' ? '⏸' : '☕';
+  let text = '';
+  if (s >= 0.75 || O.sel === a.id) text = a._where === 'meeting' ? 'на совещании' : a.state === 'work' ? (a.current || '') : a.state === 'queue' ? `в очереди: ${a.queued}` : a.state === 'pause' ? 'пауза' : '';
+  const name = a.name.split(' ')[0];
+  ctx.font = `600 ${Math.max(8, 9.5 * s)}px -apple-system,system-ui,sans-serif`; ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(236,240,246,.9)'; ctx.fillText(name, sx, sy + 13 * s);
+  const label = text ? `${icon} ${text.length > 26 ? text.slice(0, 25) + '…' : text}` : icon;
+  const tw = ctx.measureText(label).width + 10 * s;
+  const yb = hy - 22 * s;
+  ctx.fillStyle = a.state === 'work' ? 'rgba(20,50,31,.92)' : a._where === 'meeting' ? 'rgba(58,50,32,.92)' : 'rgba(21,27,36,.88)';
+  ctx.beginPath(); ctx.roundRect(sx - tw / 2, yb - 11 * s, tw, 15 * s, 6 * s); ctx.fill();
+  ctx.fillStyle = a.state === 'work' ? '#9df0c5' : a._where === 'meeting' ? '#ffd166' : '#c9d2de'; ctx.fillText(label, sx, yb);
+}
+
+function drawSpecial(ctx, r, t) {
+  if (r.key === '_director') {
+    const x = r.x + 3.5, y = r.y + 2.3; drawDesk(ctx, x, y, '#d4a72c', true);
+    box(ctx, x - 1.9, y - 0.3, 0.9, 0.6, 0, 0.9, '#3b2a1d'); // шкаф
+    const [sx, sy] = iso(x + 0.15, y + 0.9, 1.3); ctx.font = `700 ${Math.max(9, 11 * O.cam.s)}px -apple-system,system-ui,sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd166'; ctx.fillText('👑 Вы', sx, sy);
+  }
+  if (r.key === '_meeting') {
+    box(ctx, r.x + 1.1, r.y + 2.4, 6.8, 1.3, 0.36, 0.08, '#4a3a2a');
+    for (let i = 0; i < 4; i++) box(ctx, r.x + 1.6 + i * 1.8, r.y + 2.7, 0.12, 0.7, 0, 0.36, '#2f2318');
+    const m = O.data && O.data.meeting;
+    if (m) { const [sx, sy] = iso(r.x + 4.5, r.y + 3, 2.2); ctx.font = `600 ${Math.max(8, 10 * O.cam.s)}px -apple-system,system-ui,sans-serif`; ctx.textAlign = 'center'; const tx = '📣 ' + (m.agenda.length > 30 ? m.agenda.slice(0, 29) + '…' : m.agenda); const w = ctx.measureText(tx).width + 12; ctx.fillStyle = 'rgba(58,50,32,.95)'; ctx.beginPath(); ctx.roundRect(sx - w / 2, sy - 12, w, 17, 7); ctx.fill(); ctx.fillStyle = '#ffd166'; ctx.fillText(tx, sx, sy); }
+  }
+  if (r.key === '_kitchen') {
+    box(ctx, r.x + 0.3, r.y + 0.3, 3.2, 0.6, 0, 0.55, '#3b4250'); box(ctx, r.x + 0.3, r.y + 0.3, 3.2, 0.6, 0.55, 0.05, '#c9d2de');
+    box(ctx, r.x + 2.6, r.y + 2.6, 1.4, 1.4, 0.34, 0.06, '#6e4a2e'); box(ctx, r.x + 3.2, r.y + 3.2, 0.2, 0.2, 0, 0.34, '#3b2a1d');
+    box(ctx, r.x + 0.6, r.y + 3.6, 0.9, 1.8, 0, 0.3, '#2f6f5f'); // диван
+  }
+}
+
+function frame(ts) {
+  const c = cv(); if (!c || document.getElementById('office').hidden) { O.raf = 0; return; }
+  const t = ts / 1000, dt = Math.min(0.05, t - (O.t || t)); O.t = t;
+  const dpr = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
+  if (c.width !== W * dpr || c.height !== H * dpr) { c.width = W * dpr; c.height = H * dpr; }
+  const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  if (!O.data) { O.raf = requestAnimationFrame(frame); return; }
+  // движение: идём к цели, свободные бродят по кухне
+  for (const p of O.people.values()) {
+    const a = p.a, dx = p.tx - p.x, dy = p.ty - p.y, dist = Math.hypot(dx, dy), sp = 1.6 * dt;
+    if (dist > 0.02) { p.x += (dx / dist) * Math.min(sp, dist); p.y += (dy / dist) * Math.min(sp, dist); }
+    else if (a._where === 'kitchen' && Math.random() < dt * 0.25) { const k = O.rooms.find((r) => r.key === '_kitchen'); p.tx = k.x + 1 + Math.random() * (k.w - 2); p.ty = k.y + 1.2 + Math.random() * (k.h - 2.4); }
+  }
+  for (const r of O.rooms) drawRoom(ctx, r);
+  const items = [];
+  for (const r of O.rooms) {
+    if (r.key.startsWith('_')) items.push({ d: r.x + r.y + 2, f: () => drawSpecial(ctx, r, t) });
+  }
+  for (const p of O.people.values()) {
+    const a = p.a;
+    if (a._desk) items.push({ d: a._desk.x + a._desk.y, f: () => drawDesk(ctx, a._desk.x, a._desk.y, DCOL[a.dept] || '#5aa9ff', a.state === 'work') });
+    items.push({ d: p.x + p.y + 0.01, f: () => drawPerson(ctx, p, t) });
+  }
+  items.sort((u, v) => u.d - v.d).forEach((i) => i.f());
+  O.raf = requestAnimationFrame(frame);
+}
+
+// жесты: перетаскивание, щипок, колесо, тап по сотруднику
+(function gestures() {
+  const pts = new Map(); let start = null, pinch = null;
+  const el = () => cv();
+  document.addEventListener('pointerdown', (e) => { if (e.target !== el()) return; el().setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); start = { x: e.clientX, y: e.clientY, cx: O.cam.x, cy: O.cam.y, moved: false };
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), s: O.cam.s, mx: (a[0] + b[0]) / 2, my: (a[1] + b[1]) / 2, cx: O.cam.x, cy: O.cam.y }; } });
+  document.addEventListener('pointermove', (e) => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size === 2 && pinch) { const [a, b] = [...pts.values()]; const k = Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d; zoomAt(pinch.mx, pinch.my, Math.max(0.3, Math.min(2.5, pinch.s * k)), pinch); start.moved = true; return; }
+    if (start) { const dx = e.clientX - start.x, dy = e.clientY - start.y; if (Math.hypot(dx, dy) > 6) start.moved = true; O.cam.x = start.cx + dx; O.cam.y = start.cy + dy; } });
+  const up = (e) => { if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
+    if (start && !start.moved && pts.size === 0) tapAt(e.clientX, e.clientY);
+    if (pts.size === 0) start = null; else { const [p] = [...pts.values()]; start = { x: p[0], y: p[1], cx: O.cam.x, cy: O.cam.y, moved: true }; } };
+  document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
+  document.addEventListener('wheel', (e) => { if (e.target !== el()) return; e.preventDefault(); zoomAt(e.clientX, e.clientY, Math.max(0.3, Math.min(2.5, O.cam.s * (e.deltaY < 0 ? 1.12 : 0.89)))); }, { passive: false });
+})();
+function zoomAt(mx, my, ns, base) {
+  const r = cv().getBoundingClientRect(); const px = mx - r.left, py = my - r.top;
+  const b = base || { s: O.cam.s, cx: O.cam.x, cy: O.cam.y };
+  const k = ns / b.s; O.cam.x = px - (px - b.cx) * k; O.cam.y = py - (py - b.cy) * k; O.cam.s = ns;
+}
+function tapAt(cx, cy) {
+  const r = cv().getBoundingClientRect(); const x = cx - r.left, y = cy - r.top;
+  let best = null, bd = 26 * Math.max(0.7, O.cam.s);
+  for (const p of O.people.values()) { if (!p._hit) continue; const d = Math.hypot(p._hit[0] - x, p._hit[1] - y); if (d < bd) { bd = d; best = p; } }
+  if (best) { haptic(); openAgent(best.a.id); return; }
+  // тап по комнате отдела — состав отдела
+  for (const rm of O.rooms) { if (rm.key.startsWith('_')) { if (rm.key === '_meeting') { if (inRoom(rm, x, y)) return openSheet('meetings'); } continue; } if (inRoom(rm, x, y)) return openDept(rm); }
+}
+function inRoom(rm, x, y) {
+  const P = [iso(rm.x, rm.y), iso(rm.x + rm.w, rm.y), iso(rm.x + rm.w, rm.y + rm.h), iso(rm.x, rm.y + rm.h)];
+  let inside = false; for (let i = 0, j = 3; i < 4; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside; }
+  return inside;
+}
+const SRU = { work: ['работает', 'g'], queue: ['ждёт в очереди', 'w'], pause: ['на паузе', 'w'], idle: ['свободен(на)', ''] };
+async function openAgent(id, silent) {
+  const a = O.data.agents.find((x) => x.id === id); if (!a) return;
+  O.sel = id; current = 'agent';
+  $('#sh-title').textContent = a.name; $('#sheet').classList.add('open'); if (tg) tg.BackButton.show();
+  const tasks = await api(`/api/agents/${id}/tasks`).catch(() => []);
+  const st = a._where === 'meeting' ? ['на совещании', 'w'] : SRU[a.state];
+  $('#sh-body').innerHTML = `<div class="card"><div class="row"><span style="width:10px;height:10px;border-radius:5px;background:${DCOL[a.dept] || '#5aa9ff'}"></span><b>${esc(a.role)}</b>${a.head ? ' ⭐' : ''}<span class="sp2"></span><span class="st ${st[1]}">${st[0]}</span></div>
+    ${a.current ? `<div style="margin-top:8px">⌨ Сейчас: <b>${esc(a.current)}</b></div>` : ''}
+    <div class="note" style="margin-top:6px">В очереди: ${a.queued} · сделано сегодня: ${a.done_today} · Claude сегодня: ${money(a.cost_today)}</div>
+    ${a.last_title ? `<div class="note" style="margin-top:6px">Последнее: ${esc(a.last_title)}</div>${a.last_result ? `<pre class="note" style="margin-top:4px">${esc(a.last_result)}</pre>` : ''}` : ''}
+    <button class="btn gold full" onclick="orderTo('${a.id}')">✍️ Дать поручение</button></div>
+    <div class="k" style="margin:10px 0 6px">Задачи</div>${tasks.map((t) => `<div class="card"><div class="row"><b>${esc(t.title)}</b><span class="sp2"></span><span class="st ${(TST[t.status] || ['', ''])[1]}">${(TST[t.status] || [t.status])[0]}</span></div>${t.result ? `<pre class="note" style="margin-top:4px">${esc(t.result)}</pre>` : ''}${t.error ? `<div class="note" style="color:var(--r)">${esc(t.error)}</div>` : ''}</div>`).join('') || '<p class="note">Пока нет.</p>'}`;
+}
+function openDept(rm) {
+  const staff = O.data.agents.filter((a) => a.dept === rm.key);
+  current = 'dept'; O.sel = null; $('#sh-title').textContent = rm.name; $('#sheet').classList.add('open'); if (tg) tg.BackButton.show();
+  $('#sh-body').innerHTML = staff.map((a) => { const st = a._where === 'meeting' ? ['на совещании', 'w'] : SRU[a.state]; return `<div class="card" onclick="openAgent('${a.id}')"><div class="row"><b>${esc(a.name)}</b>${a.head ? ' ⭐' : ''}<span class="sp2"></span><span class="st ${st[1]}">${st[0]}</span></div><div class="note">${esc(a.role)}</div>${a.current ? `<div style="margin-top:4px">⌨ ${esc(a.current)}</div>` : ''}</div>`; }).join('')
+    + `<button class="btn gold full" onclick="orderToDept('${rm.key}')">✍️ Поручить отделу</button>`;
+}
+async function orderTo(id) { await openSheet('order'); const s = document.getElementById('oTo'); if (s) s.value = id; }
+async function orderToDept(key) { const head = O.data.agents.find((a) => a.dept === key && a.head) || O.data.agents.find((a) => a.dept === key); orderTo(head ? head.id : 'coo'); }
+
+function enterOffice() {
+  haptic('medium'); closeSheet();
+  document.getElementById('app').hidden = true; document.getElementById('office').hidden = false;
+  if (tg) { tg.BackButton.show(); }
+  O.fitted = false; loadOffice(); clearInterval(O.timer); O.timer = setInterval(loadOffice, 8000);
+  if (!O.raf) O.raf = requestAnimationFrame(frame);
+}
+function leaveOffice() {
+  document.getElementById('office').hidden = true; document.getElementById('app').hidden = false; clearInterval(O.timer); O.sel = null;
+  if (tg && !current) tg.BackButton.hide();
+}
 
 if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor('#0c1016'); tg.setBackgroundColor('#0c1016'); } catch {} }
 paintScene(); setInterval(paintScene, 60000);

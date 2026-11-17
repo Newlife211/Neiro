@@ -65,6 +65,27 @@ export function createHttp(ctx) {
   R('POST', /^\/api\/questions\/(\d+)\/answer$/, (q, m, b) => answerQuestion(ctx, Number(m[1]), b.answer, 'director:cabinet'));
   R('POST', /^\/api\/orders$/, (q, m, b) => giveOrder(ctx, { text: b.text, to: b.agent_id || (b.dept ? null : 'coo'), dept: b.dept || null, priority: Number(b.priority) || 2, via: 'cabinet' }));
   R('GET', /^\/api\/orders$/, () => db.all(`SELECT t.id,t.title,t.status,t.created_at,t.finished_at,substr(t.result,1,800) result,g.name agent_name FROM tasks t LEFT JOIN agents g ON g.id=t.agent_id WHERE t.created_by='director' ORDER BY t.id DESC LIMIT 50`));
+  // ---- офис: кто чем занят прямо сейчас (для 3D-вида в кабинете) ----
+  R('GET', /^\/api\/office$/, () => {
+    const agents = db.all(`SELECT a.id,a.name,a.role,a.dept,a.head,a.enabled,
+      (SELECT t.title FROM tasks t WHERE t.agent_id=a.id AND t.status='running' ORDER BY t.started_at DESC LIMIT 1) current,
+      (SELECT t.started_at FROM tasks t WHERE t.agent_id=a.id AND t.status='running' ORDER BY t.started_at DESC LIMIT 1) started_at,
+      (SELECT COUNT(*) FROM tasks t WHERE t.agent_id=a.id AND t.status='queued') queued,
+      (SELECT COUNT(*) FROM tasks t WHERE t.agent_id=a.id AND t.status='blocked') blocked,
+      (SELECT COUNT(*) FROM tasks t WHERE t.agent_id=a.id AND t.status='done' AND t.finished_at>=datetime('now','start of day')) done_today,
+      (SELECT t.title FROM tasks t WHERE t.agent_id=a.id AND t.status='done' ORDER BY t.finished_at DESC LIMIT 1) last_title,
+      (SELECT substr(t.result,1,300) FROM tasks t WHERE t.agent_id=a.id AND t.status='done' ORDER BY t.finished_at DESC LIMIT 1) last_result,
+      (SELECT t.finished_at FROM tasks t WHERE t.agent_id=a.id AND t.status='done' ORDER BY t.finished_at DESC LIMIT 1) last_at,
+      (SELECT COALESCE(SUM(cost_base),0) FROM runs r WHERE r.agent_id=a.id AND r.ts>=datetime('now','start of day')) cost_today
+      FROM agents a WHERE a.enabled=1 ORDER BY a.dept, a.head DESC, a.id`);
+    const paused = db.setting('paused', false), stopped = db.setting('stopped', false);
+    for (const a of agents) a.state = a.current ? 'work' : a.blocked ? 'pause' : a.queued ? (paused ? 'pause' : 'queue') : 'idle';
+    const meeting = db.get(`SELECT id, agenda, participants, status FROM meetings WHERE status!='done' ORDER BY id DESC LIMIT 1`);
+    const depts = db.all('SELECT key, name FROM departments').filter((d) => agents.some((a) => a.dept === d.key));
+    return { depts, agents, paused, stopped, meeting: meeting ? { ...meeting, participants: J(meeting.participants, []) } : null,
+      stats: { work: agents.filter((a) => a.state === 'work').length, queue: agents.filter((a) => a.state === 'queue').length, idle: agents.filter((a) => a.state === 'idle').length, total: agents.length } };
+  });
+  R('GET', /^\/api\/agents\/([a-z0-9_]+)\/tasks$/, (q, m) => db.all(`SELECT id,title,status,created_by,created_at,finished_at,substr(result,1,500) result,error FROM tasks WHERE agent_id=? ORDER BY id DESC LIMIT 15`, m[1]));
   R('GET', /^\/api\/meetings$/, () => ({ meetings: meetingsView(db), heads: heads(db) }));
   R('POST', /^\/api\/meetings$/, (q, m, b) => createMeeting(ctx, { agenda: b.agenda, participants: b.participants, via: 'cabinet' }));
   R('GET', /^\/api\/radar$/, () => ({
