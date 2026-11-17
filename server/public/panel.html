@@ -45,7 +45,7 @@ pre{white-space:pre-wrap;background:#0f141c;border:1px solid var(--l);border-rad
 <main id="main"></main>
 </div>
 <script>
-const TABS=[['ov','Обзор'],['dec','Решения'],['tasks','Задачи'],['proj','Проекты'],['agents','Агенты'],['docs','Документы'],['money','Деньги'],['feed','Лента']];
+const TABS=[['ov','Обзор'],['dec','Решения'],['tasks','Задачи'],['proj','Проекты'],['agents','Агенты'],['docs','Документы'],['money','Деньги'],['recon','Сверка'],['feed','Лента']];
 let tab='ov',T=localStorage.getItem('ns_token')||'',ov=null,timer=null;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -57,7 +57,7 @@ const post=(p,b={})=>api(p,{method:'POST',body:JSON.stringify(b)});
 function login(){T=$('#tok').value.trim();api('/api/overview').then(()=>{localStorage.setItem('ns_token',T);start()}).catch(e=>$('#lerr').textContent='Неверный токен')}
 function logout(){localStorage.removeItem('ns_token');T='';$('#app').hidden=true;$('#login').hidden=false;clearInterval(timer)}
 function start(){$('#login').hidden=true;$('#app').hidden=false;render();clearInterval(timer);timer=setInterval(()=>{if(!document.querySelector('textarea:focus,input:focus'))render()},10000)}
-function nav(){const n=ov?ov.pending_approvals+ov.projects.filter(p=>p.stage==='decision').length:0;$('#nav').innerHTML=TABS.map(([k,t])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')">${t}${k==='dec'&&n?`<span class="badge">${n}</span>`:''}</button>`).join('');
+function nav(){const n=ov?ov.pending_approvals+ov.projects.filter(p=>p.stage==='decision').length:0,rn=ov?ov.bank_unmatched:0;$('#nav').innerHTML=TABS.map(([k,t])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')">${t}${k==='dec'&&n?`<span class="badge">${n}</span>`:''}${k==='recon'&&rn?`<span class="badge">${rn}</span>`:''}</button>`).join('');
  $('#stopBtn').textContent=ov&&ov.stopped?'▶ Снять СТОП':'🛑 СТОП';$('#pauseBtn').textContent=ov&&ov.paused?'▶ Продолжить':'⏸ Пауза'}
 function go(k){tab=k;render()}
 async function toggle(k){const v=!ov[k];if(k==='stopped'&&v&&!confirm('Включить СТОП? Агенты ничего не будут отправлять и тратить, пока вы его не снимете.'))return;await post('/api/control',{[k]:v});render()}
@@ -71,6 +71,7 @@ ${o.stopped?'<div class="card warn">🛑 Включён режим СТОП: в�
 <div class="card"><div class="k">Расходы за месяц</div><div class="v">${money(o.expenses_month)}</div><div class="note">Claude API: ${money(o.claude_api_month)}</div></div>
 <div class="card"><div class="k">Траты агентов сегодня</div><div class="v">${money(l.spent_today)}</div><div class="note">лимит ${l.day} / месяц ${money(l.spent_month)} из ${l.month}</div></div>
 <div class="card"><div class="k">Ждут вашего решения</div><div class="v" style="color:var(--y)">${o.pending_approvals}</div><div class="note">${o.telegram?'дублируются в Telegram':'Telegram не подключён'}</div></div>
+${o.balances&&o.balances.length?`<div class="card"><div class="k">Банк</div>${o.balances.map(b=>`<div class="row"><span class="note">${esc(b.bank)} · ${esc(b.name||'')}</span><b>${(+b.balance).toLocaleString('ru-RU')} ${esc(b.currency)}</b></div>`).join('')}</div>`:''}
 <div class="card"><div class="k">Задачи за сутки</div><div class="v">${o.tasks_done_24h}</div><div class="note">сбоев: ${o.tasks_failed_24h}</div></div>
 </div>
 <div class="card"><h4 style="margin-top:0">Поручение компании</h4><div class="row"><input id="qt" placeholder="Например: подготовить запуск ИИ-генератора резюме на рынок ЕС" style="flex:1"><button class="btn gold" onclick="quick()">Поручить COO</button></div></div>
@@ -88,8 +89,20 @@ async agents(){const a=await api('/api/agents');return `<p class="note">Вклю
 async docs(){const d=await api('/api/documents');return d.length?`<div class="card"><table><tr><th>Документ</th><th>Автор</th><th>Дата</th></tr>${d.map(x=>`<tr style="cursor:pointer" onclick="showDoc(${x.id})"><td><b>${esc(x.title)}</b> <span class="st">${esc(x.kind||'')}</span></td><td>${esc(x.agent_name||'')}</td><td class="note">${esc(x.created_at)}</td></tr>`).join('')}</table></div>`:'<p class="note">Документов пока нет.</p>'},
 async money(){const l=await api('/api/ledger');return `<div class="card"><h4 style="margin-top:0">Добавить операцию вручную</h4><div class="row"><select id="md" style="width:120px"><option value="in">Доход</option><option value="out">Расход</option></select><input id="ma" type="number" step="0.01" placeholder="Сумма" style="width:120px"><input id="mc" value="${ov.base}" style="width:80px"><input id="mn" placeholder="Комментарий" style="flex:1"><button class="btn gold" onclick="addLedger()">Добавить</button></div></div>
  <div class="card"><table><tr><th>Дата</th><th>Тип</th><th>Сумма</th><th>Источник</th><th>Комментарий</th></tr>${l.map(x=>`<tr><td class="note">${esc(x.ts)}</td><td>${x.direction==='in'?'<span style="color:var(--g)">доход</span>':'расход'} · ${esc(x.category)}</td><td>${x.amount} ${esc(x.currency)}${x.currency!==ov.base?` <span class="note">(${money(x.amount_base)})</span>`:''}</td><td>${esc(x.source)}</td><td class="note">${esc(x.note||'')}</td></tr>`).join('')}</table></div>`},
+async recon(){const b=await api('/api/bank');const fx=b.fx;const RS={new:'новая',unmatched:'нужно решение',matched:'сверено',payout:'выплата провайдера',internal:'внутренняя',ignored:'игнор'};
+ const amt=t=>`<b style="color:${t.amount>0?'var(--g)':'var(--t)'}">${t.amount>0?'+':''}${t.amount} ${esc(t.currency)}</b>`;
+ return `<div class="card"><div class="row"><h4 style="margin:0">Банки и курсы</h4><span class="sp"></span><button class="btn gold" onclick="syncBank()">Обновить сейчас</button></div>
+ <div class="row" style="margin-top:8px">${b.balances.length?b.balances.map(x=>`<span class="st">${esc(x.bank)} ${esc(x.name||'')}: ${(+x.balance).toLocaleString('ru-RU')} ${esc(x.currency)}</span>`).join(''):`<span class="note">Банки не подключены: Revolut ${b.revolut?'✓':'—'}, Paysera ${b.paysera?'✓':'—'} (см. docs/FINANCE.md)</span>`}</div>
+ <p class="note">Курсы: ${fx?`${esc((fx.sources||[]).join(', '))} · 1 EUR = ${fx.rates.USD||'—'} USD = ${fx.rates.RUB||'—'} RUB`:'ещё не загружены'}</p></div>
+ ${b.cards_waiting.length?`<div class="card"><h4 style="margin-top:0">Карты под траты — ждут оплаты</h4>${b.cards_waiting.map(a=>`<div class="row"><b>#${a.id}</b><span>${esc(a.payload.vendor||'')}</span><span class="st">•••• ${esc(a.result.last_digits||'')}</span><span>лимит ${a.result.limit} ${esc(a.result.currency)}</span><span class="note">${esc(a.payload.purpose||'')}</span></div>`).join('')}<p class="note">Оплатите картой из приложения Revolut — списание закроет трату автоматически.</p></div>`:''}
+ <h3>Нужно ваше решение</h3>${b.unmatched.length?b.unmatched.map(t=>`<div class="card"><div class="row">${amt(t)}<span>${esc(t.counterparty||t.description||'')}</span><span class="note">${esc(t.provider)} · ${esc((t.ts||'').slice(0,16).replace('T',' '))}</span></div>${t.description&&t.counterparty?`<div class="note">${esc(t.description)}</div>`:''}
+ <div class="row" style="margin-top:8px"><select id="cat${t.id}" style="width:170px">${(t.amount<0?['services','tools','ads','hosting','salary','taxes','bank_fees','other']:['revenue','other_income','refund_in','loan','capital'] ).map(c=>`<option>${c}</option>`).join('')}</select>
+ <button class="btn ok" onclick="resolveTx(${t.id},'${t.amount<0?'expense':'income'}')">${t.amount<0?'Записать расход':'Записать доход'}</button><button class="btn" onclick="resolveTx(${t.id},'internal')">Перевод между своими</button><button class="btn" onclick="resolveTx(${t.id},'ignore')">Игнорировать</button></div></div>`).join(''):'<p class="note">Все операции объяснены.</p>'}
+ <div class="card"><h4 style="margin-top:0">Последние операции банка</h4><table><tr><th>Дата</th><th>Сумма</th><th>Контрагент</th><th>Статус</th></tr>${b.recent.map(t=>`<tr><td class="note">${esc((t.ts||'').slice(0,10))}</td><td>${amt(t)}</td><td>${esc(t.counterparty||t.description||'')}${t.action_id?` <span class="note">трата #${t.action_id}</span>`:''}</td><td><span class="st ${t.status==='unmatched'?'pending':t.status==='matched'?'done':''}">${RS[t.status]||t.status}</span></td></tr>`).join('')}</table></div>`},
 async feed(){const f=await api('/api/feed');return `<div class="card feed">${f.map(x=>`<div class="${x.level}"><span class="note">${esc(x.ts)}</span> ${esc(x.icon)} ${esc(x.text)}</div>`).join('')}</div>`},
 };
+async function syncBank(){const r=await post('/api/bank/sync');alert(`Новых операций: ${r.added}. Сверено картами: ${r.cards}, связано: ${r.linked}, выплат провайдеров: ${r.payouts}, требуют решения: ${r.unmatched}`);render()}
+async function resolveTx(id,as){const c=document.getElementById('cat'+id);await post(`/api/bank/${id}/resolve`,{as,category:c?c.value:null});render()}
 async function act(id,a){if(a==='approve'&&!confirm('Одобрить действие #'+id+'?'))return;await post(`/api/actions/${id}/${a}`);render()}
 async function pdec(id,a){await post(`/api/projects/${id}/${a}`);render()}
 async function quick(){const t=$('#qt').value.trim();if(!t)return;await post('/api/tasks',{title:t.slice(0,200),body:t,dept:'admin',agent_id:'coo',priority:2});$('#qt').value='';render()}

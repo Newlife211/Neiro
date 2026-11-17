@@ -11,6 +11,9 @@ import { createWorker } from './worker.js';
 import { createScheduler } from './company.js';
 import { createTelegram } from './telegram.js';
 import { createHttp } from './http.js';
+import { revolutConfig, revolutClient } from './revolut.js';
+import { payseraConfig } from './bank.js';
+import { applyRates } from './fx.js';
 
 const log = {
   info: (...a) => console.log(new Date().toISOString(), '[info]', ...a),
@@ -21,7 +24,11 @@ export function createApp(cfg, opts = {}) {
   const db = opts.db || openDb(path.join(cfg.dataDir, 'neurosfera.db'));
   const ctx = { cfg, db, log, fetch: opts.fetch || fetch, backoffScale: opts.backoffScale };
   seed(db, cfg);
-  ctx.executors = opts.executors || buildExecutors(cfg, ctx.fetch);
+  applyRates(cfg, db.setting('fx_rates')); // последние известные курсы ЕЦБ/ЦБ РФ
+  ctx.revolutCfg = opts.revolutCfg || revolutConfig();
+  ctx.revolut = opts.revolut || (ctx.revolutCfg.enabled ? revolutClient(ctx.revolutCfg, db, ctx.fetch) : null);
+  ctx.paysera = opts.paysera || payseraConfig();
+  ctx.executors = opts.executors || buildExecutors(cfg, ctx.fetch, { revolut: () => ctx.revolut, revolutCfg: ctx.revolutCfg });
   ctx.actions = createActions(ctx);
   ctx.llm = createLLM(ctx);
   ctx.runtime = createAgentRuntime(ctx);

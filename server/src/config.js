@@ -72,5 +72,6 @@ export function configWarnings(c) {
   if (c.stripe.secretKey && !c.stripe.webhookSecret) w.push('STRIPE_WEBHOOK_SECRET не задан — вебхуки Stripe будут отклоняться.');
   if (!c.yookassa.shopId) w.push('ЮKassa не настроена.');
   if (!c.agentmail.apiKey) w.push('AgentMail не настроен — агенты не смогут отправлять письма.');
+  if (!process.env.REVOLUT_CLIENT_ID) w.push('Revolut не подключён — траты агентов оплачиваются вручную, выписки не сверяются.');
   return w;
 }

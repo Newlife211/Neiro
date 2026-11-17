@@ -32,6 +32,8 @@ nano .env
 | ЮKassa (РФ) | yookassa.ru → Интеграция → Ключи API | `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY` |
 | Уведомления ЮKassa | Интеграция → HTTP-уведомления: `https://ДОМЕН/webhooks/yookassa?k=СЕКРЕТ`, события `payment.succeeded`, `refund.succeeded` | `YOOKASSA_WEBHOOK_KEY` |
 | AgentMail | console.agentmail.to → API Keys | `AGENTMAIL_API_KEY` |
+| Revolut Business | Settings → APIs → Business API (по шагам — `docs/FINANCE.md`) | `REVOLUT_*` |
+| Paysera | персональный токен только на чтение | `PAYSERA_TOKEN`, `PAYSERA_ACCOUNT` |
 
 Лимиты трат (`LIMIT_*`) задаются в той же базовой валюте. На старте разумно поставить маленькие:
 - 20 € за одну трату;

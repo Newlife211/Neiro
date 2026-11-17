@@ -2,6 +2,8 @@
 import { addTask } from './worker.js';
 import { STAGE_RU, companyStatus } from './agent.js';
 import { round2 } from './policy.js';
+import { updateRates } from './fx.js';
+import { importBanks, reconcile } from './bank.js';
 
 export function decideProject(ctx, id, approve, by = 'director', note = '') {
   const { db } = ctx;
@@ -73,7 +75,21 @@ export function createScheduler(ctx) {
     }
   }
 
+  async function finance() {
+    // курсы — раз в сутки; выписки и сверка — каждые 15 минут
+    const fxAt = db.setting('fx_rates')?.updated;
+    if (!fxAt || Date.now() - Date.parse(fxAt) > 20 * 3600000) await updateRates(ctx).catch((e) => ctx.log?.error('fx', e.message));
+    const last = db.setting('bank_polled_at', 0);
+    if ((ctx.revolut || ctx.paysera?.enabled) && Date.now() - last > 15 * 60000) {
+      db.setSetting('bank_polled_at', Date.now());
+      await importBanks(ctx);
+      const r = await reconcile(ctx);
+      if (r.unmatched && !db.setting('recon_alert_' + today())) { db.setSetting('recon_alert_' + today(), true); ctx.notify?.(`🔎 Сверка: ${r.unmatched} операций банка без объяснения. Откройте «Сверку» в пульте.`); }
+    }
+  }
+
   async function tick() {
+    await finance();
     const h = hour();
     if (h >= 8) once('morning', morning);
     if (h >= 20) once('evening', () => {
@@ -83,5 +99,5 @@ export function createScheduler(ctx) {
     await pollInbound();
   }
   let t;
-  return { start() { t = setInterval(() => tick().catch((e) => ctx.log?.error('sched', e)), 60000); tick().catch(() => {}); }, stop() { clearInterval(t); }, tick, morning, pollInbound };
+  return { finance, start() { t = setInterval(() => tick().catch((e) => ctx.log?.error('sched', e)), 60000); tick().catch(() => {}); }, stop() { clearInterval(t); }, tick, morning, pollInbound };
 }

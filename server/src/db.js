@@ -41,6 +41,11 @@ CREATE TABLE IF NOT EXISTS payment_links (
   id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, ext_id TEXT NOT NULL, url TEXT, project_id INTEGER, title TEXT,
   amount REAL, currency TEXT, recurring TEXT, customer_email TEXT, status TEXT DEFAULT 'open', created_at TEXT DEFAULT (datetime('now')), UNIQUE(provider, ext_id));
 CREATE TABLE IF NOT EXISTS inbound (provider TEXT, ext_id TEXT, ts TEXT DEFAULT (datetime('now')), task_id INTEGER, PRIMARY KEY(provider, ext_id));
+CREATE TABLE IF NOT EXISTS bank_tx (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, ext_id TEXT NOT NULL, account TEXT, ts TEXT, amount REAL NOT NULL, currency TEXT NOT NULL,
+  amount_base REAL, description TEXT, counterparty TEXT, card_id TEXT, kind TEXT, status TEXT NOT NULL DEFAULT 'new',
+  action_id INTEGER, ledger_id INTEGER, note TEXT, raw TEXT, created_at TEXT DEFAULT (datetime('now')), UNIQUE(provider, ext_id));
+CREATE INDEX IF NOT EXISTS bank_tx_status ON bank_tx(status);
 CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), actor TEXT, event TEXT, data TEXT);
 `;
 

@@ -1,7 +1,7 @@
 // Исполнители внешних действий. Каждый получает уже разрешённое политикой действие.
 import { stripeClient, yookassaClient } from './payments.js';
 
-export function buildExecutors(cfg, fetchImpl = fetch) {
+export function buildExecutors(cfg, fetchImpl = fetch, extra = {}) {
   const stripe = stripeClient(cfg, fetchImpl), yk = yookassaClient(cfg, fetchImpl);
 
   async function agentmail(method, path, body) {
@@ -69,7 +69,25 @@ export function buildExecutors(cfg, fetchImpl = fetch) {
       if (!r.ok) throw new Error('Deploy hook ответил ' + r.status);
       return { result: { status: r.status } };
     },
-    // spend, change_price, sign_contract, real_trade, custom — нет универсального API:
+    // Трата: если подключён Revolut — выпускаем виртуальную карту ровно на сумму этой траты.
+    // Оплату картой проводит человек (или сервис списывает сам по подписке); как только списание
+    // появится в выписке, сверка закроет трату фактической суммой и (по умолчанию) закроет карту.
+    async spend(a, ctx) {
+      const rev = extra.revolut?.();
+      if (!rev) return { status: 'manual', result: { note: 'Revolut не подключён — оплатите вручную и отметьте «Я выполнил»' } };
+      const rc = extra.revolutCfg;
+      let amount = a.amount;
+      if (a.currency !== rc.cardCurrency) {
+        // пересчёт в валюту карты через базовую валюту + 3% запаса на курс и комиссию
+        const { toBase } = await import('./policy.js');
+        const base = toBase(cfg, a.amount, a.currency);
+        amount = Math.ceil((base / (cfg.fx[cfg.baseCurrency] || 1)) * (cfg.fx[rc.cardCurrency] || 1) * 1.03 * 100) / 100;
+      }
+      const card = await rev.createSpendCard({ actionId: a.id, amount, vendor: a.payload.vendor });
+      return { status: 'manual', result: { card_id: card.id, last_digits: card.last_digits, limit: amount, currency: rc.cardCurrency,
+        note: `Создана виртуальная карта Revolut •••• ${card.last_digits || '????'} с лимитом ${amount} ${rc.cardCurrency} (только на эту трату, ${rc.cardDays} дн.). Оплатите ею у «${a.payload.vendor || 'поставщика'}» — списание сверится автоматически.` } };
+    },
+    // change_price, sign_contract, real_trade, custom — нет универсального API:
     // после одобрения исполнитель вернёт «manual», и директор подтвердит выполнение в пульте.
   };
 }

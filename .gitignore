@@ -8,3 +8,5 @@ server/var/
 *.db
 *.db-wal
 *.db-shm
+deploy/secrets/
+*.pem

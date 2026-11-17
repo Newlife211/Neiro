@@ -16,12 +16,14 @@
   - кнопка «СТОП» мгновенно останавливает все внешние действия;
   - отдельный потолок на расходы Claude API.
 - **Пульт директора** (веб): обзор денег, решения, задачи, проекты, штат, документы, учёт, лента событий.
+- **Финансы:** курсы ЕЦБ и ЦБ РФ; под каждую одобренную трату — виртуальная карта Revolut ровно на сумму; выписки Revolut и Paysera сверяются с учётом автоматически.
 - **Telegram-бот:** кнопки «Одобрить / Отклонить», команды `/status`, `/task`, `/stop`, итоги дня.
 - **Без внешних зависимостей:** Node 22, встроенный SQLite, Docker + Caddy (HTTPS).
 
 ## Документы
 - [docs/DEPLOY.md](docs/DEPLOY.md) — запуск на VPS шаг за шагом
 - [docs/LAUNCH-CHECKLIST.md](docs/LAUNCH-CHECKLIST.md) — что сделать до первых реальных денег
+- [docs/FINANCE.md](docs/FINANCE.md) — курсы валют, карта Revolut под каждую трату, выписки и автосверка
 - [docs/SECURITY.md](docs/SECURITY.md) — лимиты, подтверждения, защита
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — устройство системы
 - [docs/office-overview.md](docs/office-overview.md), [docs/crypto-trading.md](docs/crypto-trading.md), [docs/scaling-plan.md](docs/scaling-plan.md) — обзор офиса, крипто-направление, план масштабирования
@@ -29,7 +31,7 @@
 ## Разработка
 ```bash
 cd server
-npm test        # 23 теста: политика, деньги, вебхуки, агенты, пульт, Telegram
+npm test        # 31 тест: политика, деньги, вебхуки, карты, сверка, агенты, пульт, Telegram
 npm run check   # проверка настроек .env
 npm start       # локальный запуск, пульт на http://localhost:8080
 ```
