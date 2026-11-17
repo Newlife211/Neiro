@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Нейросфера — пульт директора</title>
+<style>
+:root{--bg:#0d1117;--p:#151b24;--l:#232b38;--t:#e8edf5;--m:#8b96a8;--g:#3ddc97;--r:#ff6b6b;--y:#ffd166;--b:#5aa9ff;--gold:#d4a72c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;gap:12px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--l);flex-wrap:wrap;position:sticky;top:0;background:var(--bg);z-index:2}
+.logo{font-weight:800;letter-spacing:.12em;color:var(--gold)}.sp{flex:1}
+nav{display:flex;gap:4px;flex-wrap:wrap}nav button{background:none;border:0;color:var(--m);padding:8px 10px;border-radius:8px;cursor:pointer;font:inherit}
+nav button.on{background:var(--p);color:var(--t)}.badge{background:var(--r);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;margin-left:4px}
+main{padding:18px;max-width:1200px;margin:0 auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.card{background:var(--p);border:1px solid var(--l);border-radius:12px;padding:14px;margin-bottom:10px}
+.k{color:var(--m);font-size:12px}.v{font-size:22px;font-weight:700;margin-top:2px}
+button.btn{background:#222b39;border:1px solid var(--l);color:var(--t);padding:7px 12px;border-radius:8px;cursor:pointer;font:inherit}
+button.ok{border-color:#2b6b50;background:#163528}button.no,button.stop{border-color:#6b2b2b;background:#351616}button.gold{border-color:#7a6220;background:#3a3220;color:var(--y)}
+input,select,textarea{background:#0f141c;border:1px solid var(--l);color:var(--t);border-radius:8px;padding:8px;font:inherit;width:100%}
+table{width:100%;border-collapse:collapse}td,th{padding:7px 6px;border-bottom:1px solid var(--l);text-align:left;vertical-align:top}th{color:var(--m);font-weight:500;font-size:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.note{color:var(--m);font-size:12px}.warn{border-color:#6b5a20;background:#221d10}
+.st{font-size:11px;padding:2px 7px;border-radius:9px;background:#222b39;white-space:nowrap}
+.st.pending,.st.queued,.st.manual,.st.blocked{color:var(--y)}.st.executed,.st.done,.st.auto{color:var(--g)}.st.failed,.st.rejected,.st.denied{color:var(--r)}.st.running{color:var(--b)}
+pre{white-space:pre-wrap;background:#0f141c;border:1px solid var(--l);border-radius:8px;padding:12px;max-height:70vh;overflow:auto}
+#login{max-width:420px;margin:12vh auto}
+.feed div{padding:5px 0;border-bottom:1px dashed var(--l)}.feed .bad{color:var(--r)}.feed .good{color:var(--g)}.feed .warn{color:var(--y)}
+</style>
+</head>
+<body>
+<div id="login" class="card" hidden>
+  <h3>Пульт директора</h3>
+  <p class="note">Введите токен директора (DIRECTOR_TOKEN из файла .env на сервере). Он сохранится только в этом браузере.</p>
+  <input id="tok" type="password" placeholder="Токен директора" autocomplete="current-password">
+  <div class="row" style="margin-top:10px"><button class="btn gold" onclick="login()">Войти</button><span id="lerr" class="note"></span></div>
+</div>
+<div id="app" hidden>
+<header>
+  <span class="logo">НЕЙРОСФЕРА</span><span class="note">боевой режим</span>
+  <nav id="nav"></nav><span class="sp"></span>
+  <button id="pauseBtn" class="btn" onclick="toggle('paused')">⏸ Пауза</button>
+  <button id="stopBtn" class="btn stop" onclick="toggle('stopped')">🛑 СТОП</button>
+  <button class="btn" onclick="logout()">Выйти</button>
+</header>
+<main id="main"></main>
+</div>
+<script>
+const TABS=[['ov','Обзор'],['dec','Решения'],['tasks','Задачи'],['proj','Проекты'],['agents','Агенты'],['docs','Документы'],['money','Деньги'],['feed','Лента']];
+let tab='ov',T=localStorage.getItem('ns_token')||'',ov=null,timer=null;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const STAGE={idea:'Идея',analysis:'Анализ',decision:'Решение директора',build:'Разработка',test:'Тест',launch:'Запуск',revenue:'Доход',closed:'Закрыт'};
+const KIND={send_email:'Отправить письмо',reply_email:'Ответить на письмо',post_telegram:'Пост в Telegram',create_payment_link:'Ссылка на оплату',spend:'Оплатить расход',refund:'Возврат денег',deploy:'Выкатить в продакшн',change_price:'Изменить цену',sign_contract:'Принять договор',real_trade:'Сделка на бирже',custom:'Иное действие'};
+const ST={pending:'ждёт вас',auto:'сам',approved:'одобрено',executed:'выполнено',manual:'вручную',failed:'ошибка',rejected:'отклонено',denied:'запрещено',queued:'в очереди',running:'в работе',done:'готово',blocked:'пауза (бюджет)',cancelled:'отменено'};
+async function api(p,o={}){const r=await fetch(p,{...o,headers:{Authorization:'Bearer '+T,'Content-Type':'application/json'}});if(r.status===401){logout();throw new Error('auth')}const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j}
+const post=(p,b={})=>api(p,{method:'POST',body:JSON.stringify(b)});
+function login(){T=$('#tok').value.trim();api('/api/overview').then(()=>{localStorage.setItem('ns_token',T);start()}).catch(e=>$('#lerr').textContent='Неверный токен')}
+function logout(){localStorage.removeItem('ns_token');T='';$('#app').hidden=true;$('#login').hidden=false;clearInterval(timer)}
+function start(){$('#login').hidden=true;$('#app').hidden=false;render();clearInterval(timer);timer=setInterval(()=>{if(!document.querySelector('textarea:focus,input:focus'))render()},10000)}
+function nav(){const n=ov?ov.pending_approvals+ov.projects.filter(p=>p.stage==='decision').length:0;$('#nav').innerHTML=TABS.map(([k,t])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')">${t}${k==='dec'&&n?`<span class="badge">${n}</span>`:''}</button>`).join('');
+ $('#stopBtn').textContent=ov&&ov.stopped?'▶ Снять СТОП':'🛑 СТОП';$('#pauseBtn').textContent=ov&&ov.paused?'▶ Продолжить':'⏸ Пауза'}
+function go(k){tab=k;render()}
+async function toggle(k){const v=!ov[k];if(k==='stopped'&&v&&!confirm('Включить СТОП? Агенты ничего не будут отправлять и тратить, пока вы его не снимете.'))return;await post('/api/control',{[k]:v});render()}
+const money=v=>(Math.round(v*100)/100).toLocaleString('ru-RU')+' '+(ov?ov.base:'');
+async function render(){try{ov=await api('/api/overview');nav();const f=V[tab];$('#main').innerHTML=await f()}catch(e){if(e.message!=='auth')$('#main').innerHTML=`<div class="card warn">Ошибка: ${esc(e.message)}</div>`}}
+const V={
+async ov(){const o=ov,l=o.spend_limits;return `${o.warnings.length?`<div class="card warn"><b>Настройка не завершена</b><ul>${o.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></div>`:''}
+${o.stopped?'<div class="card warn">🛑 Включён режим СТОП: внешние действия не выполняются.</div>':''}
+<div class="grid">
+<div class="card"><div class="k">Выручка за месяц</div><div class="v" style="color:var(--g)">${money(o.revenue_month)}</div><div class="note">за сутки ${money(o.revenue_24h)}</div></div>
+<div class="card"><div class="k">Расходы за месяц</div><div class="v">${money(o.expenses_month)}</div><div class="note">Claude API: ${money(o.claude_api_month)}</div></div>
+<div class="card"><div class="k">Траты агентов сегодня</div><div class="v">${money(l.spent_today)}</div><div class="note">лимит ${l.day} / месяц ${money(l.spent_month)} из ${l.month}</div></div>
+<div class="card"><div class="k">Ждут вашего решения</div><div class="v" style="color:var(--y)">${o.pending_approvals}</div><div class="note">${o.telegram?'дублируются в Telegram':'Telegram не подключён'}</div></div>
+<div class="card"><div class="k">Задачи за сутки</div><div class="v">${o.tasks_done_24h}</div><div class="note">сбоев: ${o.tasks_failed_24h}</div></div>
+</div>
+<div class="card"><h4 style="margin-top:0">Поручение компании</h4><div class="row"><input id="qt" placeholder="Например: подготовить запуск ИИ-генератора резюме на рынок ЕС" style="flex:1"><button class="btn gold" onclick="quick()">Поручить COO</button></div></div>
+<div class="card"><h4 style="margin-top:0">Проекты</h4>${o.projects.length?o.projects.map(p=>`<div class="row"><b>${esc(p.name)}</b><span class="st">${STAGE[p.stage]}</span>${p.roi?`<span class="note">ROI ${p.roi}%</span>`:''}</div>`).join(''):'<span class="note">Пока нет — R&D готовит гипотезы.</span>'}</div>`},
+async dec(){const [acts,man,proj]=await Promise.all([api('/api/actions?status=pending'),api('/api/actions?status=manual'),api('/api/projects')]);const pd=proj.filter(p=>p.stage==='decision');
+ const card=a=>`<div class="card"><div class="row"><b>#${a.id} ${esc(KIND[a.kind]||a.kind)}</b><span class="note">${esc(a.agent_name||'')}</span>${a.amount?`<b>${a.amount} ${esc(a.currency)}</b>`:''}<span class="sp"></span><span class="st ${a.status}">${ST[a.status]}</span></div><div class="note" style="margin:4px 0">${esc(a.policy_reason||'')}</div><pre>${esc(JSON.stringify(a.payload,null,2))}</pre>${a.status==='pending'?`<div class="row"><button class="btn ok" onclick="act(${a.id},'approve')">✅ Одобрить</button><button class="btn no" onclick="act(${a.id},'reject')">✖ Отклонить</button></div>`:`<div class="row"><span class="note">${esc(a.result&&a.result.note||'')}</span><button class="btn ok" onclick="act(${a.id},'done')">Я выполнил</button></div>`}</div>`;
+ return `<h3>Проекты на решение</h3>${pd.length?pd.map(p=>`<div class="card"><div class="row"><b>${esc(p.name)}</b>${p.roi?`<span class="note">ROI ${p.roi}%</span>`:''}${p.price?`<span class="note">цена ${p.price} ${esc(p.currency||'')}</span>`:''}</div><p>${esc(p.summary||'')}</p><div class="row"><button class="btn ok" onclick="pdec(${p.id},'approve')">✅ Утвердить</button><button class="btn no" onclick="pdec(${p.id},'reject')">✖ Отклонить</button></div></div>`).join(''):'<p class="note">Нет.</p>'}
+ <h3>Действия агентов</h3>${acts.length?acts.map(card).join(''):'<p class="note">Нет действий, ждущих решения.</p>'}
+ <h3>Выполнить вручную</h3>${man.length?man.map(card).join(''):'<p class="note">Нет.</p>'}`},
+async tasks(){const [t,d,ag]=await Promise.all([api('/api/tasks'),api('/api/departments'),api('/api/agents')]);
+ return `<div class="card"><h4 style="margin-top:0">Новая задача</h4><input id="tt" placeholder="Что сделать"><textarea id="tb" rows="3" style="margin-top:6px" placeholder="Подробности, критерий готовности"></textarea><div class="row" style="margin-top:6px"><select id="td" style="flex:1"><option value="">Отдел (по умолчанию — Администрация)</option>${d.map(x=>`<option value="${x.key}">${esc(x.name)}</option>`).join('')}</select><select id="ta" style="flex:1"><option value="">Исполнитель — выберет отдел</option>${ag.filter(a=>a.enabled).map(a=>`<option value="${a.id}">${esc(a.name)} — ${esc(a.role)}</option>`).join('')}</select><button class="btn gold" onclick="newTask()">Поставить</button></div></div>
+ <div class="card"><table><tr><th>#</th><th>Задача</th><th>Исполнитель</th><th>Статус</th><th></th></tr>${t.map(x=>`<tr><td>${x.id}</td><td><b>${esc(x.title)}</b>${x.result?`<div class="note">${esc(x.result)}</div>`:''}${x.error?`<div class="note" style="color:var(--r)">${esc(x.error)}</div>`:''}</td><td>${esc(x.agent_name||x.dept||'')}</td><td><span class="st ${x.status}">${ST[x.status]||x.status}</span></td><td>${['queued','blocked'].includes(x.status)?`<button class="btn" onclick="cancelT(${x.id})">Отменить</button>`:`<button class="btn" onclick="showTask(${x.id})">Открыть</button>`}</td></tr>`).join('')}</table></div>`},
+async proj(){const p=await api('/api/projects');return p.length?p.map(x=>`<div class="card"><div class="row"><b>${esc(x.name)}</b><span class="st">${STAGE[x.stage]}</span><span class="sp"></span><span>выручка ${money(x.revenue)}</span></div><p class="note">${esc(x.summary||'')}</p></div>`).join(''):'<p class="note">Проектов пока нет.</p>'},
+async agents(){const a=await api('/api/agents');return `<p class="note">Включённые агенты работают и расходуют Claude API. Выключенные не получают задач. Почта — адрес ящика AgentMail агента.</p><div class="card"><table><tr><th>Сотрудник</th><th>Отдел</th><th>Задач</th><th>Claude за месяц</th><th>Почта</th><th>В штате</th></tr>${a.map(x=>`<tr><td><b>${esc(x.name)}</b>${x.head?' ⭐':''}<div class="note">${esc(x.role)}</div></td><td>${esc(x.dept)}</td><td>${x.done}</td><td>${money(x.cost_month)}</td><td><input value="${esc(x.email||'')}" placeholder="—" onchange="agSet('${x.id}',{email:this.value})"></td><td><input type="checkbox" ${x.enabled?'checked':''} onchange="agSet('${x.id}',{enabled:this.checked})" style="width:auto"></td></tr>`).join('')}</table></div>`},
+async docs(){const d=await api('/api/documents');return d.length?`<div class="card"><table><tr><th>Документ</th><th>Автор</th><th>Дата</th></tr>${d.map(x=>`<tr style="cursor:pointer" onclick="showDoc(${x.id})"><td><b>${esc(x.title)}</b> <span class="st">${esc(x.kind||'')}</span></td><td>${esc(x.agent_name||'')}</td><td class="note">${esc(x.created_at)}</td></tr>`).join('')}</table></div>`:'<p class="note">Документов пока нет.</p>'},
+async money(){const l=await api('/api/ledger');return `<div class="card"><h4 style="margin-top:0">Добавить операцию вручную</h4><div class="row"><select id="md" style="width:120px"><option value="in">Доход</option><option value="out">Расход</option></select><input id="ma" type="number" step="0.01" placeholder="Сумма" style="width:120px"><input id="mc" value="${ov.base}" style="width:80px"><input id="mn" placeholder="Комментарий" style="flex:1"><button class="btn gold" onclick="addLedger()">Добавить</button></div></div>
+ <div class="card"><table><tr><th>Дата</th><th>Тип</th><th>Сумма</th><th>Источник</th><th>Комментарий</th></tr>${l.map(x=>`<tr><td class="note">${esc(x.ts)}</td><td>${x.direction==='in'?'<span style="color:var(--g)">доход</span>':'расход'} · ${esc(x.category)}</td><td>${x.amount} ${esc(x.currency)}${x.currency!==ov.base?` <span class="note">(${money(x.amount_base)})</span>`:''}</td><td>${esc(x.source)}</td><td class="note">${esc(x.note||'')}</td></tr>`).join('')}</table></div>`},
+async feed(){const f=await api('/api/feed');return `<div class="card feed">${f.map(x=>`<div class="${x.level}"><span class="note">${esc(x.ts)}</span> ${esc(x.icon)} ${esc(x.text)}</div>`).join('')}</div>`},
+};
+async function act(id,a){if(a==='approve'&&!confirm('Одобрить действие #'+id+'?'))return;await post(`/api/actions/${id}/${a}`);render()}
+async function pdec(id,a){await post(`/api/projects/${id}/${a}`);render()}
+async function quick(){const t=$('#qt').value.trim();if(!t)return;await post('/api/tasks',{title:t.slice(0,200),body:t,dept:'admin',agent_id:'coo',priority:2});$('#qt').value='';render()}
+async function newTask(){const t=$('#tt').value.trim();if(!t)return;await post('/api/tasks',{title:t,body:$('#tb').value,dept:$('#td').value||null,agent_id:$('#ta').value||null});tab='tasks';render()}
+async function cancelT(id){await post(`/api/tasks/${id}/cancel`);render()}
+async function agSet(id,b){await api('/api/agents/'+id,{method:'PATCH',body:JSON.stringify(b)})}
+async function addLedger(){await post('/api/ledger',{direction:$('#md').value,amount:+$('#ma').value,currency:$('#mc').value,note:$('#mn').value});render()}
+async function showDoc(id){const d=await api('/api/documents/'+id);$('#main').innerHTML=`<button class="btn" onclick="render()">← Назад</button><h3>${esc(d.title)}</h3><pre>${esc(d.content)}</pre>`}
+async function showTask(id){const t=await api('/api/tasks/'+id);$('#main').innerHTML=`<button class="btn" onclick="render()">← Назад</button><h3>#${t.id} ${esc(t.title)}</h3><p class="note">${esc(t.body||'')}</p><pre>${esc(t.result||t.error||'')}</pre>`}
+if(T)api('/api/overview').then(start).catch(()=>logout());else logout();
+</script>
+</body>
+</html>
