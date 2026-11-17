@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Кабинет директора — Нейросфера</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#0c1016;--p:#151b24;--p2:#1b2330;--l:#263041;--t:#ecf0f6;--m:#8d98aa;--g:#3ddc97;--r:#ff5a5a;--y:#ffd166;--b:#5aa9ff;--gold:#d4a72c}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--t);font:14px/1.45 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100%}
+#app[hidden]{display:none}
+.top{display:flex;align-items:center;gap:8px;padding:10px 14px 6px}
+.top .t1{font-weight:800;letter-spacing:.14em;font-size:11px;color:var(--gold)}
+.top .t2{font-size:12px;color:var(--m)}
+.top .sp{flex:1}
+.pill{font-size:11px;padding:3px 9px;border-radius:10px;background:var(--p2);color:var(--m)}
+.pill.stop{background:#3b1414;color:var(--r)}
+.scene{flex:1;min-height:0;display:flex;align-items:flex-end;justify-content:center;background:#141b26}
+svg#desk{width:100%;height:100%;display:block}
+.obj{cursor:pointer;transition:filter .15s,transform .15s;transform-box:fill-box;transform-origin:center}
+.obj:active{filter:brightness(1.35)}
+.obj.alert .badge{animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+.lbl{font:600 9px -apple-system,system-ui,sans-serif;fill:rgba(236,240,246,.62);text-anchor:middle;pointer-events:none;letter-spacing:.02em}
+.steam{animation:steam 3s ease-in-out infinite;opacity:.0}
+@keyframes steam{0%{opacity:0;transform:translateY(4px)}40%{opacity:.35}100%{opacity:0;transform:translateY(-10px)}}
+.bar{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:8px 10px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(#0c101600,#0c1016 30%)}
+.bar button{position:relative;background:var(--p);border:1px solid var(--l);color:var(--t);border-radius:12px;padding:8px 2px 7px;font:600 11px -apple-system,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;gap:3px}
+.bar button .i{font-size:18px;line-height:1}
+.bar button.danger{border-color:#5c2222;background:#2a1212;color:#ffb3b3}
+.bar .bd{position:absolute;top:-5px;right:6px;background:var(--r);color:#fff;border-radius:9px;font-size:10px;padding:0 5px;min-width:16px}
+/* нижняя шторка */
+.sheet{position:fixed;inset:0;z-index:5;pointer-events:none}
+.sheet .shade{position:absolute;inset:0;background:#0008;opacity:0;transition:opacity .2s}
+.sheet .panel{position:absolute;left:0;right:0;bottom:0;height:88%;background:var(--bg);border-top:1px solid var(--l);border-radius:18px 18px 0 0;transform:translateY(102%);transition:transform .25s ease;display:flex;flex-direction:column}
+.sheet.open{pointer-events:auto}.sheet.open .shade{opacity:1}.sheet.open .panel{transform:none}
+.ph{display:flex;align-items:center;gap:10px;padding:12px 16px 8px}
+.ph h3{margin:0;font-size:17px;flex:1}
+.ph .x{background:var(--p2);border:0;color:var(--m);width:30px;height:30px;border-radius:15px;font-size:16px}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--l);margin:8px auto 0}
+.pc{flex:1;overflow:auto;padding:4px 14px 30px;-webkit-overflow-scrolling:touch}
+.card{background:var(--p);border:1px solid var(--l);border-radius:14px;padding:12px;margin:0 0 10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sp2{flex:1}
+.k{color:var(--m);font-size:12px}.v{font-size:20px;font-weight:700}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.note{color:var(--m);font-size:12px}
+.btn{background:var(--p2);border:1px solid var(--l);color:var(--t);padding:9px 12px;border-radius:10px;font:600 13px -apple-system,system-ui,sans-serif}
+.btn.ok{background:#14321f;border-color:#2b6b50;color:#9df0c5}.btn.no{background:#321414;border-color:#6b2b2b;color:#ffb3b3}.btn.gold{background:#3a3220;border-color:#7a6220;color:var(--y)}
+.btn.full{width:100%;margin-top:8px}
+input,textarea,select{width:100%;background:#0f141c;border:1px solid var(--l);color:var(--t);border-radius:10px;padding:10px;font:14px -apple-system,system-ui,sans-serif}
+textarea{resize:vertical}
+.st{font-size:11px;padding:2px 8px;border-radius:9px;background:var(--p2);white-space:nowrap}
+.st.w{color:var(--y)}.st.g{color:var(--g)}.st.r{color:var(--r)}.st.b{color:var(--b)}
+.feed div{padding:6px 0;border-bottom:1px dashed var(--l);font-size:13px}
+.feed .bad{color:#ff9b9b}.feed .good{color:#9df0c5}.feed .warn{color:#ffe08a}
+pre{white-space:pre-wrap;font:13px/1.5 -apple-system,system-ui,sans-serif;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--l);background:var(--p2);color:var(--t);border-radius:16px;padding:6px 10px;font-size:12px}
+.chip.on{border-color:#7a6220;background:#3a3220;color:var(--y)}
+#login{position:fixed;inset:0;z-index:9;background:var(--bg);display:none;align-items:center;justify-content:center;padding:24px}
+#login .card{max-width:380px;width:100%}
+.office{position:fixed;inset:0;display:flex;flex-direction:column;background:radial-gradient(ellipse at 50% 30%,#18202c,#0a0d12 75%)}
+.office[hidden]{display:none}
+.oh{display:flex;align-items:center;gap:8px;padding:10px 12px 6px}
+.oh h3{margin:0;font-size:16px}
+#oStats{display:flex;gap:6px;flex-wrap:wrap;padding:0 12px 6px}
+#iso{flex:1;width:100%;touch-action:none;display:block}
+.ohint{position:absolute;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom));text-align:center;color:var(--m);font-size:11px;pointer-events:none}
+.ofit{position:absolute;right:12px;bottom:calc(30px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:6px}
+.ofit button{width:40px;height:40px;border-radius:20px;background:var(--p);border:1px solid var(--l);color:var(--t);font-size:18px}
+.toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:var(--p2);border:1px solid var(--l);padding:8px 14px;border-radius:12px;z-index:10;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top"><div><div class="t1">НЕЙРОСФЕРА</div><div class="t2">Кабинет директора</div></div><span class="sp"></span><button class="pill" style="border:1px solid #7a6220;background:#3a3220;color:#ffd166;font-weight:700" onclick="enterOffice()">🚪 В офис</button><span id="clock" class="pill">--:--</span><span id="stopPill" class="pill">работаем</span></div>
+  <div class="scene">
+  <svg id="desk" viewBox="0 -150 400 650" preserveAspectRatio="xMidYMax meet" aria-label="Рабочий стол директора">
+    <defs>
+      <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#18202c"/><stop offset="1" stop-color="#10151d"/></linearGradient>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop id="sky1" offset="0" stop-color="#0b1a33"/><stop id="sky2" offset="1" stop-color="#28385a"/></linearGradient>
+      <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a3c25"/><stop offset=".55" stop-color="#6e4a2e"/><stop offset="1" stop-color="#7b5434"/></linearGradient>
+      <linearGradient id="woodEdge" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f2918"/><stop offset="1" stop-color="#24170e"/></linearGradient>
+      <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f2236"/><stop offset="1" stop-color="#0a1522"/></linearGradient>
+      <radialGradient id="lampLight" cx=".3" cy=".1" r=".9"><stop offset="0" stop-color="#ffd58a" stop-opacity=".28"/><stop offset="1" stop-color="#ffd58a" stop-opacity="0"/></radialGradient>
+      <radialGradient id="dome" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#ff8080"/><stop offset=".6" stop-color="#d81f1f"/><stop offset="1" stop-color="#7a0b0b"/></radialGradient>
+      <radialGradient id="globeG" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#5fc1ff"/><stop offset="1" stop-color="#1b4f86"/></radialGradient>
+      <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4"/></filter>
+    </defs>
+
+    <!-- стена и окно -->
+    <rect x="-200" y="-400" width="800" height="700" fill="url(#wall)"/>
+    <!-- потолок со светильниками -->
+    <rect x="-200" y="-400" width="800" height="262" fill="#0e131b"/>
+    <rect x="-200" y="-140" width="800" height="3" fill="#232c3a"/>
+    <g fill="#fff3d6"><ellipse cx="110" cy="-146" rx="26" ry="3" opacity=".8"/><ellipse cx="290" cy="-146" rx="26" ry="3" opacity=".8"/></g>
+    <g fill="#ffe7b0" opacity=".06"><polygon points="84,-143 136,-143 170,-40 50,-40"/><polygon points="264,-143 316,-143 350,-40 230,-40"/></g>
+    <!-- часы -->
+    <g><circle cx="200" cy="-82" r="26" fill="#e9e4da" stroke="#2a313d" stroke-width="4"/><g stroke="#2a313d" stroke-width="1.5"><path d="M200 -104v4M200 -64v4M178 -82h4M218 -82h4"/></g>
+      <line id="hHand" x1="200" y1="-82" x2="200" y2="-96" stroke="#1d2330" stroke-width="3" stroke-linecap="round"/><line id="mHand" x1="200" y1="-82" x2="200" y2="-102" stroke="#1d2330" stroke-width="2" stroke-linecap="round"/><circle cx="200" cy="-82" r="2" fill="#c0392b"/></g>
+    <!-- табличка компании -->
+    <g><rect x="40" y="-100" width="104" height="40" rx="3" fill="#1d2430" stroke="#c9a227" stroke-width="1.5"/><text x="92" y="-82" font-size="9" font-weight="800" fill="#d4a72c" text-anchor="middle" letter-spacing="2">НЕЙРОСФЕРА</text><text x="92" y="-69" font-size="6.5" fill="#8d98aa" text-anchor="middle">кабинет директора</text></g>
+    <!-- полка с наградами -->
+    <g><rect x="258" y="-66" width="110" height="5" fill="#5a3c25"/><rect x="270" y="-86" width="14" height="20" fill="#c9a227"/><circle cx="277" cy="-90" r="6" fill="#d4a72c"/><rect x="292" y="-92" width="8" height="26" fill="#2f6fb3"/><rect x="302" y="-88" width="8" height="22" fill="#3d8f63"/><rect x="312" y="-94" width="8" height="28" fill="#8a3a3a"/><rect x="330" y="-80" width="28" height="14" rx="2" fill="#2a313d"/><text x="344" y="-70" font-size="6" fill="#9fd8b4" text-anchor="middle">MRR</text></g>
+    <rect x="66" y="18" width="268" height="126" rx="4" fill="#0a0e14"/>
+    <rect x="72" y="24" width="256" height="114" fill="url(#sky)"/>
+    <g id="stars"></g>
+    <g id="city"></g>
+    <rect x="198" y="24" width="4" height="114" fill="#222b38"/>
+    <rect x="72" y="80" width="256" height="3" fill="#222b38"/>
+    <rect x="66" y="142" width="268" height="6" fill="#1e2632"/>
+
+    <!-- доска команды на стене -->
+    <g class="obj" data-go="team">
+      <rect x="10" y="40" width="50" height="66" rx="3" fill="#6b5236" stroke="#3d2e1d" stroke-width="3"/>
+      <rect x="16" y="47" width="17" height="15" fill="#e8e2d0"/><rect x="37" y="49" width="17" height="15" fill="#d9e6ef"/>
+      <rect x="18" y="68" width="17" height="15" fill="#efe0d9"/><rect x="37" y="72" width="17" height="15" fill="#e2efd9"/>
+      <rect x="22" y="88" width="26" height="12" fill="#f3efe0"/>
+      <circle cx="24" cy="47" r="1.6" fill="#d33"/><circle cx="45" cy="49" r="1.6" fill="#3a6"/><circle cx="26" cy="68" r="1.6" fill="#36c"/>
+      <text class="lbl" x="35" y="120">Команда</text>
+    </g>
+
+    <!-- спасательный круг на стене: сопровождение проектов -->
+    <g class="obj" data-go="support">
+      <circle cx="35" cy="172" r="21" fill="#e9e4da"/><circle cx="35" cy="172" r="10" fill="#222b38"/>
+      <g fill="#d94a3d"><path d="M35 151 a21 21 0 0 1 14.8 6.2 l-7.1 7.1 a11 11 0 0 0 -7.7 -3.3 z"/><path d="M56 172 a21 21 0 0 1 -6.2 14.8 l-7.1 -7.1 a11 11 0 0 0 3.3 -7.7 z"/><path d="M35 193 a21 21 0 0 1 -14.8 -6.2 l7.1 -7.1 a11 11 0 0 0 7.7 3.3 z"/><path d="M14 172 a21 21 0 0 1 6.2 -14.8 l7.1 7.1 a11 11 0 0 0 -3.3 7.7 z"/></g>
+      <g class="badge" id="b-support" display="none"><circle cx="54" cy="153" r="8" fill="#ff5a5a"/><text id="t-support" x="54" y="156.5" font-size="8.5" font-weight="700" fill="#fff" text-anchor="middle">0</text></g>
+      <text class="lbl" x="35" y="208">Сопровождение</text>
+    </g>
+
+    <!-- график на стене: маркетинг -->
+    <g class="obj" data-go="marketing" transform="translate(-76,-96)">
+      <rect x="340" y="40" width="50" height="66" rx="3" fill="#1d2430" stroke="#3d2e1d" stroke-width="3"/>
+      <path d="M347 56 l13 -6 v18 l-13 -6 z" fill="#ffd166"/><rect x="343" y="55" width="5" height="8" rx="1" fill="#ffd166"/>
+      <path d="M363 52 q5 7 0 14" stroke="#ffd166" stroke-width="1.6" fill="none"/><path d="M367 49 q8 10 0 20" stroke="#ffd166" stroke-width="1.6" fill="none" opacity=".6"/>
+      <polyline points="346,98 355,90 363,93 373,80 384,74" stroke="#3ddc97" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+      <g class="badge" id="b-marketing" display="none"><circle cx="388" cy="42" r="8" fill="#ff5a5a"/><text id="t-marketing" x="388" y="45.5" font-size="8.5" font-weight="700" fill="#fff" text-anchor="middle">0</text></g>
+      <text class="lbl" x="365" y="113">Маркетинг</text>
+    </g>
+
+    <!-- дверь в офис -->
+    <g class="obj" onclick="enterOffice()">
+      <rect x="346" y="20" width="50" height="232" fill="#2a1f16"/>
+      <rect x="350" y="24" width="42" height="228" fill="#5a3c25"/>
+      <rect x="355" y="32" width="32" height="70" rx="2" fill="#4a3220"/><rect x="355" y="112" width="32" height="120" rx="2" fill="#4a3220"/>
+      <rect x="358" y="36" width="26" height="40" fill="#9cc7e8" opacity=".35"/>
+      <circle cx="356" cy="150" r="3" fill="#d4a72c"/>
+      <rect x="350" y="6" width="42" height="12" rx="2" fill="#123b24"/><text x="371" y="15" font-size="7" font-weight="800" fill="#3ddc97" text-anchor="middle">ОФИС</text>
+    </g>
+    <!-- растение -->
+    <g opacity=".95">
+      <path d="M352 228 q-14 -40 -2 -70 q6 30 4 70z" fill="#2f7d4f"/><path d="M356 228 q10 -46 30 -58 q-12 34 -24 60z" fill="#3a9a5f"/>
+      <path d="M350 230 q-26 -26 -34 -50 q22 16 36 48z" fill="#2a6b45"/>
+      <path d="M338 226 h40 l-6 40 h-28z" fill="#3b4250"/>
+    </g>
+
+    <!-- столешница -->
+    <polygon points="34,282 366,282 400,474 0,474" fill="url(#wood)"/>
+    <g stroke="#4c321f" stroke-opacity=".35" stroke-width="1" fill="none">
+      <path d="M60 300 Q200 296 340 300"/><path d="M40 330 Q200 324 360 332"/><path d="M24 370 Q200 362 376 372"/><path d="M12 420 Q200 410 388 422"/>
+    </g>
+    <rect x="0" y="474" width="400" height="26" fill="url(#woodEdge)"/>
+    <polygon points="34,282 366,282 400,474 0,474" fill="url(#lampLight)"/>
+
+    <!-- лампа -->
+    <g>
+      <ellipse cx="58" cy="292" rx="16" ry="4.5" fill="#1d232d"/>
+      <path d="M58 290 L74 230 L104 206" stroke="#2a313d" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M96 196 l26 10 l-8 14 l-24 -8z" fill="#2f3744"/>
+      <ellipse cx="108" cy="214" rx="9" ry="3" fill="#ffe2a6" filter="url(#glow)"/>
+    </g>
+
+    <!-- папки с документами -->
+    <g class="obj" data-go="docs" transform="translate(0,-12)">
+      <polygon points="10,336 66,330 70,346 12,352" fill="#2f6fb3"/>
+      <polygon points="8,348 64,342 68,360 10,366" fill="#c9a227"/>
+      <polygon points="6,362 62,356 66,376 8,382" fill="#3d8f63"/>
+      <polygon points="8,348 64,342 64,345 8,351" fill="#fff" opacity=".25"/>
+      <text class="lbl" x="38" y="394">Документы</text>
+    </g>
+
+    <!-- календарь -->
+    <g class="obj" data-go="meetings">
+      <polygon points="78,330 128,326 132,362 80,366" fill="#f1ede4"/>
+      <polygon points="78,330 128,326 128,336 78,340" fill="#c0392b"/>
+      <circle cx="90" cy="330" r="2" fill="#333"/><circle cx="116" cy="328" r="2" fill="#333"/>
+      <text id="calMon" x="103" y="337" font-size="6.5" font-weight="700" fill="#fff" text-anchor="middle">НОЯ</text>
+      <text id="calDay" x="105" y="358" font-size="17" font-weight="800" fill="#2a2a2a" text-anchor="middle">17</text>
+      <g class="badge" id="b-meetings" display="none"><circle cx="132" cy="326" r="8" fill="#ffb020"/><text x="132" y="329.5" font-size="9" font-weight="700" fill="#111" text-anchor="middle">•</text></g>
+      <text class="lbl" x="105" y="378">Совещания</text>
+    </g>
+
+    <!-- монитор -->
+    <g class="obj" data-go="overview">
+      <ellipse cx="200" cy="292" rx="36" ry="6" fill="#1a1f27"/>
+      <rect x="192" y="252" width="16" height="40" fill="#232a35"/>
+      <rect x="94" y="146" width="212" height="116" rx="7" fill="#0a0d12" stroke="#2a3240" stroke-width="2"/>
+      <rect x="101" y="153" width="198" height="100" rx="3" fill="url(#screen)"/>
+      <rect x="101" y="153" width="198" height="100" rx="3" fill="#5aa9ff" opacity=".05"/>
+      <text x="110" y="168" font-size="8" font-weight="800" fill="#d4a72c" letter-spacing="1.2">НЕЙРОСФЕРА · СЕГОДНЯ</text>
+      <text x="110" y="186" font-size="7" fill="#8d98aa">Выручка за месяц</text><text id="mRev" x="110" y="200" font-size="13" font-weight="800" fill="#3ddc97">—</text>
+      <text x="206" y="186" font-size="7" fill="#8d98aa">Расходы</text><text id="mExp" x="206" y="200" font-size="13" font-weight="800" fill="#ecf0f6">—</text>
+      <text x="110" y="218" font-size="7" fill="#8d98aa">Задач за сутки</text><text id="mTasks" x="110" y="232" font-size="12" font-weight="700" fill="#ecf0f6">—</text>
+      <text x="206" y="218" font-size="7" fill="#8d98aa">Ждут вас</text><text id="mPend" x="206" y="232" font-size="12" font-weight="700" fill="#ffd166">—</text>
+      <text id="mLine" x="110" y="247" font-size="6.5" fill="#5aa9ff">загрузка…</text>
+      <text class="lbl" x="200" y="276">Обзор компании</text>
+    </g>
+
+    <!-- кружка -->
+    <g>
+      <path class="steam" d="M262 286 q-4 -8 0 -14 q4 -6 0 -12" stroke="#fff" stroke-width="2" fill="none"/>
+      <path class="steam" style="animation-delay:1.2s" d="M270 288 q-4 -8 0 -14 q4 -6 0 -12" stroke="#fff" stroke-width="2" fill="none"/>
+      <rect x="254" y="288" width="24" height="24" rx="3" fill="#e9e4da"/><ellipse cx="266" cy="289" rx="12" ry="3" fill="#3a2414"/>
+      <path d="M278 293 q9 0 9 7 q0 7 -9 7" stroke="#e9e4da" stroke-width="3" fill="none"/>
+    </g>
+
+    <!-- глобус: технологии -->
+    <g class="obj" data-go="tech">
+      <ellipse cx="330" cy="300" rx="16" ry="4" fill="#1a1f27"/>
+      <rect x="327" y="284" width="6" height="16" fill="#8a6a3a"/>
+      <circle cx="330" cy="264" r="22" fill="url(#globeG)"/>
+      <path d="M312 258 q10 -6 18 2 q6 8 16 2" stroke="#7fe0a4" stroke-width="3" fill="none" opacity=".75"/>
+      <path d="M318 274 q8 4 14 -2" stroke="#7fe0a4" stroke-width="3" fill="none" opacity=".7"/>
+      <ellipse cx="330" cy="264" rx="9" ry="22" fill="none" stroke="#fff" stroke-opacity=".25"/>
+      <path d="M304 270 a28 28 0 0 0 50 -16" stroke="#c9a227" stroke-width="2.5" fill="none"/>
+      <g class="badge" id="b-tech" display="none"><circle cx="350" cy="244" r="9" fill="#ff5a5a"/><text id="t-tech" x="350" y="247.5" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">0</text></g>
+      <text class="lbl" x="330" y="316">Технологии</text>
+    </g>
+
+    <!-- лоток «Входящие»: решения -->
+    <g class="obj" data-go="decisions">
+      <polygon points="34,404 140,398 150,446 26,454" fill="#1e2530"/>
+      <polygon points="44,398 132,393 138,428 38,434" fill="#f4f1ea"/>
+      <polygon points="48,394 134,389 138,420 44,426" fill="#fbfaf6"/>
+      <g stroke="#9aa4b2" stroke-width="1.2"><path d="M58 400 L120 396"/><path d="M58 407 L126 403"/><path d="M58 414 L110 411"/></g>
+      <polygon points="26,436 150,428 152,446 26,456" fill="#2a3240"/>
+      <text x="88" y="446" font-size="7.5" font-weight="800" fill="#c9d2de" text-anchor="middle" letter-spacing="1">ВХОДЯЩИЕ</text>
+      <g class="badge" id="b-decisions" display="none"><circle cx="142" cy="394" r="10" fill="#ff5a5a"/><text id="t-decisions" x="142" y="398" font-size="10" font-weight="800" fill="#fff" text-anchor="middle">0</text></g>
+      <text class="lbl" x="88" y="468">Решения</text>
+    </g>
+
+    <!-- блокнот: поручение -->
+    <g class="obj" data-go="order">
+      <g transform="rotate(-4 205 420)">
+        <rect x="162" y="380" width="92" height="74" rx="4" fill="#2b2f36"/>
+        <rect x="167" y="384" width="82" height="66" rx="2" fill="#f7f3e8"/>
+        <g stroke="#b9c3d0" stroke-width="1"><path d="M174 398 H242"/><path d="M174 408 H242"/><path d="M174 418 H242"/><path d="M174 428 H242"/><path d="M174 438 H242"/></g>
+        <text x="176" y="396" font-size="8" font-weight="700" fill="#5a4630" font-style="italic">Поручение:</text>
+        <path d="M176 406 q8 -3 16 0 t16 0 t16 0" stroke="#2f4f8f" stroke-width="1.2" fill="none"/>
+      </g>
+      <g transform="rotate(32 262 410)"><rect x="236" y="407" width="54" height="6" rx="3" fill="#c9a227"/><polygon points="290,407 298,410 290,413" fill="#333"/></g>
+      <text class="lbl" x="208" y="468">Поручить</text>
+    </g>
+
+    <!-- кнопка СТОП -->
+    <g class="obj" data-go="stop">
+      <ellipse cx="300" cy="352" rx="24" ry="9" fill="#1a1d22"/>
+      <rect x="278" y="340" width="44" height="12" rx="3" fill="#2a2e35"/>
+      <ellipse cx="300" cy="340" rx="17" ry="7" fill="url(#dome)"/>
+      <path d="M284 340 a16 13 0 0 1 32 0" fill="url(#dome)"/>
+      <path d="M281 341 a19 16 0 0 1 38 0" fill="#bfe6ff" fill-opacity=".12" stroke="#cfe9ff" stroke-opacity=".35"/>
+      <text id="stopTxt" x="300" y="349" font-size="6.5" font-weight="800" fill="#fff" text-anchor="middle">СТОП</text>
+      <text class="lbl" x="300" y="372">Аварийная кнопка</text>
+    </g>
+
+    <!-- смартфон: вопросы сотрудников -->
+    <g class="obj" data-go="questions">
+      <g transform="rotate(14 320 425)">
+        <rect x="296" y="384" width="50" height="88" rx="8" fill="#0d0f13" stroke="#3a404b" stroke-width="2"/>
+        <rect id="phoneScreen" x="300" y="392" width="42" height="72" rx="4" fill="#141a22"/>
+        <text id="phoneTxt" x="321" y="426" font-size="7" font-weight="700" fill="#8d98aa" text-anchor="middle">нет</text>
+        <text id="phoneTxt2" x="321" y="436" font-size="6" fill="#8d98aa" text-anchor="middle">вопросов</text>
+      </g>
+      <g class="badge" id="b-questions" display="none"><circle cx="300" cy="386" r="10" fill="#ff5a5a"/><text id="t-questions" x="300" y="390" font-size="10" font-weight="800" fill="#fff" text-anchor="middle">0</text></g>
+      <text class="lbl" x="322" y="486">Вопросы</text>
+    </g>
+
+    <!-- калькулятор: деньги -->
+    <g class="obj" data-go="money">
+      <polygon points="352,330 392,334 396,388 354,384" fill="#2a2f38"/>
+      <polygon points="357,336 388,339 389,352 358,349" fill="#9fd8b4"/>
+      <text id="calcTxt" x="373" y="348" font-size="6.5" font-weight="700" fill="#14321f" text-anchor="middle">€</text>
+      <g fill="#4a5262"><rect x="358" y="355" width="7" height="6"/><rect x="368" y="356" width="7" height="6"/><rect x="378" y="357" width="7" height="6"/><rect x="358" y="364" width="7" height="6"/><rect x="368" y="365" width="7" height="6"/><rect x="378" y="366" width="7" height="6" fill="#c9a227"/><rect x="359" y="373" width="7" height="6"/><rect x="369" y="374" width="7" height="6"/><rect x="379" y="375" width="7" height="6"/></g>
+      <g class="badge" id="b-money" display="none"><circle cx="392" cy="330" r="8" fill="#ffb020"/><text id="t-money" x="392" y="333.5" font-size="8.5" font-weight="800" fill="#111" text-anchor="middle">0</text></g>
+      <text class="lbl" x="372" y="400">Деньги</text>
+    </g>
+  </svg>
+  </div>
+  <div class="bar">
+    <button data-go="decisions"><span class="i">📥</span>Решения<span class="bd" id="bb-decisions" hidden></span></button>
+    <button data-go="order"><span class="i">✍️</span>Поручить</button>
+    <button data-go="meetings"><span class="i">📣</span>Совещание</button>
+    <button data-go="questions"><span class="i">💬</span>Вопросы<span class="bd" id="bb-questions" hidden></span></button>
+    <button data-go="stop" class="danger" id="stopBtn"><span class="i">🛑</span><span id="stopLbl">СТОП</span></button>
+  </div>
+</div>
+
+<div class="office" id="office" hidden>
+  <div class="oh"><button class="btn" onclick="leaveOffice()">← Кабинет</button><h3>Офис</h3><span class="sp2"></span><span class="note">вид сверху</span></div>
+  <div id="oStats"></div>
+  <canvas id="iso"></canvas>
+  <div class="ofit"><button onclick="zoomAt(innerWidth/2,innerHeight/2,Math.min(2.5,O.cam.s*1.25))">＋</button><button onclick="zoomAt(innerWidth/2,innerHeight/2,Math.max(0.3,O.cam.s*0.8))">－</button><button onclick="fitOffice()">⤢</button></div>
+  <div class="ohint">Листайте пальцем, щипок — масштаб. Нажмите на сотрудника или отдел.</div>
+</div>
+<div class="sheet" id="sheet"><div class="shade" data-close></div><div class="panel"><div class="grab"></div><div class="ph"><h3 id="sh-title"></h3><button class="x" data-close>✕</button></div><div class="pc" id="sh-body"></div></div></div>
+<div id="login"><div class="card"><h3 style="margin-top:0">Кабинет директора</h3><p class="note">Откройте кабинет из Telegram-бота компании. Для входа из браузера введите токен директора.</p><input id="tok" type="password" placeholder="DIRECTOR_TOKEN"><button class="btn gold full" id="loginBtn">Войти</button></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
+let AUTH = tg ? 'tma ' + tg.initData : (localStorage.getItem('ns_token') ? 'Bearer ' + localStorage.getItem('ns_token') : '');
+let ov = null, current = null;
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const money = (v) => (Math.round((v || 0) * 100) / 100).toLocaleString('ru-RU') + ' ' + (ov ? ov.base : '');
+const haptic = (t = 'light') => { try { tg && tg.HapticFeedback.impactOccurred(t); } catch {} };
+const toast = (t) => { const e = $('#toast'); e.textContent = t; e.classList.add('on'); setTimeout(() => e.classList.remove('on'), 2200); };
+const confirmBox = (text) => new Promise((res) => tg && tg.showConfirm ? tg.showConfirm(text, res) : res(confirm(text)));
+const STAGE = { idea: 'Идея', analysis: 'Анализ', decision: 'Ждёт вашего решения', build: 'Разработка', test: 'Тест', launch: 'Запуск', revenue: 'Доход', closed: 'Закрыт' };
+const KIND = { send_email: 'Отправить письмо', reply_email: 'Ответить на письмо', post_telegram: 'Пост в Telegram', create_payment_link: 'Ссылка на оплату', spend: 'Оплатить расход', refund: 'Возврат денег', deploy: 'Выкатить в продакшн', change_price: 'Изменить цену', sign_contract: 'Принять договор', real_trade: 'Сделка на бирже', custom: 'Иное действие' };
+const TST = { queued: ['в очереди', 'w'], running: ['в работе', 'b'], done: ['готово', 'g'], failed: ['не выполнено', 'r'], blocked: ['пауза', 'w'], cancelled: ['отменено', ''] };
+
+async function api(p, o = {}) {
+  const r = await fetch(p, { ...o, headers: { Authorization: AUTH, 'Content-Type': 'application/json' } });
+  if (r.status === 401) { showLogin(); throw new Error('auth'); }
+  const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j;
+}
+const post = (p, b = {}) => api(p, { method: 'POST', body: JSON.stringify(b) });
+
+function showLogin() { if (tg) { $('#app').innerHTML = '<div class="card" style="margin:20px">Доступ к кабинету только у директора компании.</div>'; return; } $('#login').style.display = 'flex'; }
+$('#loginBtn').onclick = () => { const t = $('#tok').value.trim(); localStorage.setItem('ns_token', t); AUTH = 'Bearer ' + t; $('#login').style.display = 'none'; refresh(); };
+
+// ---------- сцена ----------
+function paintScene() {
+  const now = new Date(), h = now.getHours() + now.getMinutes() / 60;
+  const [a, b] = h >= 7 && h < 17 ? ['#4f8fd6', '#b7d8f5'] : h >= 17 && h < 20.5 ? ['#3a3a7a', '#f19a5a'] : h >= 5 && h < 7 ? ['#2a3a6a', '#e7a37a'] : ['#070d1c', '#1d2b4a'];
+  $('#sky1').setAttribute('stop-color', a); $('#sky2').setAttribute('stop-color', b);
+  const night = h < 6.5 || h >= 19;
+  let s = ''; if (night) for (let i = 0; i < 22; i++) s += `<circle cx="${76 + ((i * 53) % 248)}" cy="${28 + ((i * 29) % 46)}" r="${i % 3 ? 0.7 : 1.1}" fill="#fff" opacity="${0.4 + (i % 4) * 0.15}"/>`;
+  $('#stars').innerHTML = s;
+  let c = ''; let x = 72; let seed = 7;
+  const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  while (x < 328) {
+    const w = 14 + rnd() * 22, hh = 24 + rnd() * 58, y = 138 - hh, col = night ? '#0d1422' : '#3c4c63';
+    c += `<rect x="${x}" y="${y}" width="${Math.min(w, 328 - x)}" height="${hh}" fill="${col}"/>`;
+    for (let wy = y + 5; wy < 134; wy += 7) for (let wx = x + 3; wx < x + w - 4 && wx < 324; wx += 6) if (rnd() > (night ? 0.55 : 0.8)) c += `<rect x="${wx}" y="${wy}" width="2.6" height="3" fill="${night ? '#ffd27a' : '#cfe3f7'}" opacity="${night ? 0.85 : 0.5}"/>`;
+    x += w + 2;
+  }
+  $('#city').innerHTML = c;
+  const mon = ['ЯНВ', 'ФЕВ', 'МАР', 'АПР', 'МАЙ', 'ИЮН', 'ИЮЛ', 'АВГ', 'СЕН', 'ОКТ', 'НОЯ', 'ДЕК'][now.getMonth()];
+  $('#calMon').textContent = mon; $('#calDay').textContent = now.getDate();
+  const mA = now.getMinutes() * 6, hA = (now.getHours() % 12) * 30 + now.getMinutes() / 2;
+  $('#hHand').setAttribute('transform', `rotate(${hA} 200 -82)`); $('#mHand').setAttribute('transform', `rotate(${mA} 200 -82)`);
+  $('#clock').textContent = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+function badge(id, n) {
+  const g = document.getElementById('b-' + id); if (g) { g.setAttribute('display', n ? 'inline' : 'none'); const t = document.getElementById('t-' + id); if (t) t.textContent = n > 99 ? '99+' : n; g.parentNode.classList.toggle('alert', !!n); }
+  const bb = document.getElementById('bb-' + id); if (bb) { bb.hidden = !n; bb.textContent = n; }
+}
+async function refresh() {
+  try { ov = await api('/api/overview'); } catch (e) { return; }
+  const dec = ov.pending_approvals + ov.projects.filter((p) => p.stage === 'decision').length + (ov.adoptions_waiting || 0);
+  $('#mRev').textContent = money(ov.revenue_month); $('#mExp').textContent = money(ov.expenses_month);
+  $('#mTasks').textContent = `${ov.tasks_done_24h} готово`; $('#mPend').textContent = `${dec} решений`;
+  $('#mLine').textContent = ov.stopped ? '🛑 СТОП: внешние действия остановлены' : `траты сегодня ${ov.spend_limits.spent_today} из ${ov.spend_limits.day} ${ov.base}`;
+  badge('decisions', dec); badge('questions', ov.questions_open || 0); badge('tech', ov.adoptions_waiting || 0); badge('money', ov.bank_unmatched || 0); badge('marketing', ov.marketing_waiting || 0); badge('support', ov.support_waiting || 0);
+  document.getElementById('b-meetings').setAttribute('display', ov.meetings_active ? 'inline' : 'none');
+  const q = ov.questions_open || 0;
+  $('#phoneScreen').setAttribute('fill', q ? '#1d3b5c' : '#141a22');
+  $('#phoneTxt').textContent = q ? q + ' ' + (q === 1 ? 'вопрос' : q < 5 ? 'вопроса' : 'вопросов') : 'нет'; $('#phoneTxt2').textContent = q ? 'от команды' : 'вопросов';
+  $('#phoneTxt').setAttribute('fill', q ? '#fff' : '#8d98aa');
+  $('#stopPill').textContent = ov.stopped ? 'СТОП' : ov.paused ? 'пауза' : 'работаем'; $('#stopPill').className = 'pill' + (ov.stopped ? ' stop' : '');
+  $('#stopLbl').textContent = ov.stopped ? 'Снять СТОП' : 'СТОП'; $('#stopTxt').textContent = ov.stopped ? 'ВКЛ' : 'СТОП';
+  $('#calcTxt').textContent = (ov.revenue_24h >= 0 ? '+' : '') + Math.round(ov.revenue_24h) + ' ' + ov.base;
+  if (current && V[current]) openSheet(current, true);
+}
+
+// ---------- шторка ----------
+const TITLES = { overview: '🖥 Обзор компании', decisions: '📥 Решения', questions: '💬 Вопросы команды', order: '✍️ Поручение', meetings: '📣 Совещания', docs: '📁 Документы', tech: '🛰 Технологии', marketing: '📣 Маркетинг', support: '🛟 Сопровождение', money: '🧮 Деньги', team: '👥 Команда' };
+async function openSheet(key, silent) {
+  if (key === 'stop') return toggleStop();
+  if (!silent) haptic();
+  current = key; $('#sh-title').textContent = TITLES[key]; $('#sheet').classList.add('open');
+  if (tg) { tg.BackButton.show(); }
+  if (!silent) $('#sh-body').innerHTML = '<p class="note">Загружаю…</p>';
+  if (silent && document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  try { $('#sh-body').innerHTML = await V[key](); } catch (e) { if (e.message !== 'auth') $('#sh-body').innerHTML = `<div class="card">Ошибка: ${esc(e.message)}</div>`; }
+}
+function closeSheet() { current = null; O.sel = null; $('#sheet').classList.remove('open'); if (tg && document.getElementById('office').hidden) tg.BackButton.hide(); }
+document.querySelectorAll('[data-close]').forEach((e) => (e.onclick = closeSheet));
+document.querySelectorAll('[data-go]').forEach((e) => (e.onclick = () => openSheet(e.dataset.go)));
+if (tg) tg.BackButton.onClick(() => { if ($('#sheet').classList.contains('open')) closeSheet(); else if (!document.getElementById('office').hidden) leaveOffice(); });
+
+async function toggleStop() {
+  haptic('heavy');
+  const v = !ov.stopped;
+  if (!(await confirmBox(v ? 'Включить СТОП? Агенты ничего не будут отправлять и тратить, пока вы его не снимете.' : 'Снять СТОП и вернуть агентам внешние действия?'))) return;
+  await post('/api/control', { stopped: v }); toast(v ? '🛑 СТОП включён' : '▶ Работа возобновлена'); refresh();
+}
+
+const V = {
+  async overview() {
+    const f = await api('/api/feed'); const o = ov;
+    return `<div class="grid2"><div class="card"><div class="k">Выручка, месяц</div><div class="v" style="color:var(--g)">${money(o.revenue_month)}</div><div class="note">за сутки ${money(o.revenue_24h)}</div></div>
+    <div class="card"><div class="k">Расходы, месяц</div><div class="v">${money(o.expenses_month)}</div><div class="note">Claude API ${money(o.claude_api_month)}</div></div>
+    <div class="card"><div class="k">Траты агентов сегодня</div><div class="v">${money(o.spend_limits.spent_today)}</div><div class="note">лимит ${o.spend_limits.day}</div></div>
+    <div class="card"><div class="k">Задач за сутки</div><div class="v">${o.tasks_done_24h}</div><div class="note">сбоев ${o.tasks_failed_24h}</div></div></div>
+    ${o.balances && o.balances.length ? `<div class="card"><div class="k">Банк</div>${o.balances.map((b) => `<div class="row"><span class="note">${esc(b.bank)} ${esc(b.name || '')}</span><span class="sp2"></span><b>${(+b.balance).toLocaleString('ru-RU')} ${esc(b.currency)}</b></div>`).join('')}</div>` : ''}
+    <div class="card"><div class="k" style="margin-bottom:6px">Проекты</div>${o.projects.length ? o.projects.map((p) => `<div class="row"><b>${esc(p.name)}</b><span class="sp2"></span><span class="st ${p.stage === 'decision' ? 'w' : 'b'}">${STAGE[p.stage]}</span></div>`).join('') : '<span class="note">Пока нет</span>'}</div>
+    ${o.warnings && o.warnings.length ? `<div class="card" style="border-color:#6b5a20"><div class="k">Настройка не завершена</div>${o.warnings.map((w) => `<div class="note">• ${esc(w)}</div>`).join('')}</div>` : ''}
+    <div class="card feed"><div class="k">Что происходит</div>${f.slice(0, 40).map((x) => `<div class="${x.level}">${esc(x.icon)} ${esc(x.text)} <span class="note">${esc(x.ts.slice(11, 16))}</span></div>`).join('')}</div>`;
+  },
+  async decisions() {
+    const [acts, man, proj, rad] = await Promise.all([api('/api/actions?status=pending'), api('/api/actions?status=manual'), api('/api/projects'), api('/api/radar')]);
+    const pd = proj.filter((p) => p.stage === 'decision'), ad = rad.adoptions.filter((a) => ['proposed', 'pilot_done'].includes(a.status));
+    if (!acts.length && !pd.length && !ad.length && !man.length) return '<div class="card">✨ Всё решено. Новое появится здесь и в чате.</div>';
+    const p = (a) => a.payload || {};
+    return `${pd.map((x) => `<div class="card"><div class="row"><span class="st w">проект</span><b>${esc(x.name)}</b></div><p style="margin:8px 0">${esc(x.summary || '')}</p><div class="note">${x.roi ? 'ROI ' + x.roi + '% · ' : ''}${x.price ? 'цена ' + x.price + ' ' + esc(x.currency || '') : ''}</div><div class="row" style="margin-top:8px"><button class="btn ok" onclick="pdec(${x.id},1)">✅ Утвердить</button><button class="btn no" onclick="pdec(${x.id},0)">✖ Отклонить</button></div></div>`).join('')}
+    ${acts.map((a) => `<div class="card"><div class="row"><span class="st w">#${a.id}</span><b>${esc(KIND[a.kind] || a.kind)}</b><span class="sp2"></span>${a.amount ? `<b>${a.amount} ${esc(a.currency)}</b>` : ''}</div><div class="note" style="margin:4px 0">${esc(a.agent_name || '')} · ${esc(a.policy_reason || '')}</div>
+      ${p(a).vendor || p(a).purpose ? `<div>${esc([p(a).vendor, p(a).purpose].filter(Boolean).join(' — '))}</div>` : ''}${p(a).to ? `<div class="note">Кому: ${esc([].concat(p(a).to).join(', '))}</div>` : ''}${p(a).subject ? `<div><b>${esc(p(a).subject)}</b></div>` : ''}${p(a).text ? `<pre class="note">${esc(String(p(a).text).slice(0, 600))}</pre>` : ''}${p(a).description ? `<div>${esc(p(a).description)}</div>` : ''}
+      <div class="row" style="margin-top:8px"><button class="btn ok" onclick="adec(${a.id},'approve')">✅ Одобрить</button><button class="btn no" onclick="adec(${a.id},'reject')">✖ Отклонить</button></div></div>`).join('')}
+    ${ad.map((a) => `<div class="card"><div class="row"><span class="st b">технология</span><b>${esc(a.title)}</b></div><div class="note" style="margin-top:4px">${esc(a.status_ru)}</div><div style="margin-top:4px">Польза: ${esc(a.benefit)}</div>${a.result ? `<div class="note">Итоги пилота: ${esc(a.result)}</div>` : `<div class="note">План: ${esc(a.plan)}</div>`}<div class="row" style="margin-top:8px"><button class="btn ok" onclick="tdec(${a.id},1)">✅ ${a.status === 'proposed' ? 'Запустить пилот' : 'Внедрить'}</button><button class="btn no" onclick="tdec(${a.id},0)">✖ Отклонить</button></div></div>`).join('')}
+    ${man.length ? `<div class="k" style="margin:12px 0 6px">Выполнить вручную</div>${man.map((a) => `<div class="card"><div class="row"><b>#${a.id} ${esc(KIND[a.kind] || a.kind)}</b><span class="sp2"></span>${a.amount ? `<b>${a.amount} ${esc(a.currency)}</b>` : ''}</div><div class="note">${esc((a.result && a.result.note) || '')}</div><button class="btn full" onclick="mdone(${a.id})">Я выполнил</button></div>`).join('')}` : ''}`;
+  },
+  async questions() {
+    const qs = await api('/api/questions'); const open = qs.filter((q) => q.status === 'open'), done = qs.filter((q) => q.status !== 'open').slice(0, 15);
+    return `${open.length ? open.map((q) => `<div class="card"><div class="row"><b>${esc(q.agent_name)}</b><span class="note">${esc(q.agent_role || '')}</span>${q.urgency === 'high' ? '<span class="st r">срочно</span>' : ''}</div><p style="margin:8px 0">${esc(q.question)}</p>${q.context ? `<div class="note">${esc(q.context)}</div>` : ''}
+      ${q.options.length ? `<div class="chips" style="margin-top:8px">${q.options.map((o, i) => `<button class="chip" onclick="qans(${q.id}, ${i})">${esc(o)}</button>`).join('')}</div>` : ''}
+      <textarea id="qa${q.id}" rows="2" placeholder="Ваш ответ" style="margin-top:8px"></textarea><button class="btn gold full" onclick="qtext(${q.id})">Ответить</button></div>`).join('') : '<div class="card">Открытых вопросов нет. Когда сотруднику понадобится ваше решение, вопрос появится здесь и в чате.</div>'}
+    ${done.length ? `<div class="k" style="margin:12px 0 6px">Отвеченные</div>${done.map((q) => `<div class="card"><div class="note">${esc(q.agent_name)}: ${esc(q.question)}</div><div>↳ ${esc(q.answer || '')}</div></div>`).join('')}` : ''}`;
+  },
+  async order() {
+    const [ag, orders] = await Promise.all([api('/api/agents'), api('/api/orders')]);
+    const heads = ag.filter((a) => a.enabled);
+    return `<div class="card"><div class="k" style="margin-bottom:6px">Кому</div><select id="oTo"><option value="coo">COO — распределит сам(а)</option>${heads.filter((a) => a.id !== 'coo').map((a) => `<option value="${a.id}">${esc(a.name)} — ${esc(a.role)}</option>`).join('')}</select>
+      <textarea id="oText" rows="4" placeholder="Что нужно сделать и к какому сроку" style="margin-top:8px"></textarea>
+      <div class="row" style="margin-top:8px"><label class="note"><input type="checkbox" id="oUrg" style="width:auto"> срочно</label></div>
+      <button class="btn gold full" onclick="sendOrder()">Поручить</button></div>
+      <div class="k" style="margin:12px 0 6px">Мои поручения</div>${orders.length ? orders.map((o) => `<div class="card"><div class="row"><b>${esc(o.title)}</b><span class="sp2"></span><span class="st ${(TST[o.status] || ['', ''])[1]}">${(TST[o.status] || [o.status])[0]}</span></div><div class="note">${esc(o.agent_name || '')}</div>${o.result ? `<pre class="note" style="margin-top:6px">${esc(o.result)}</pre>` : ''}</div>`).join('') : '<p class="note">Пока нет.</p>'}`;
+  },
+  async meetings() {
+    const { meetings, heads } = await api('/api/meetings');
+    const MS = { collecting: ['собираем доклады', 'w'], summarizing: ['COO пишет протокол', 'b'], done: ['протокол готов', 'g'] };
+    return `<div class="card"><div class="k" style="margin-bottom:6px">Созвать совещание</div><textarea id="mAgenda" rows="3" placeholder="Повестка: например, как выйти на первую выручку за 2 недели"></textarea>
+      <div class="k" style="margin:8px 0 6px">Участники</div><div class="chips" id="mPart">${heads.map((h) => `<button class="chip on" data-id="${h.id}" onclick="this.classList.toggle('on')">${esc(h.name)}<span class="note"> · ${esc(h.dept_name || h.dept)}</span></button>`).join('')}</div>
+      <button class="btn gold full" onclick="newMeeting()">📣 Созвать</button><p class="note" style="margin-bottom:0">Каждый участник готовит доклад, затем COO сводит протокол с решениями и поручениями. Итог придёт в чат.</p></div>
+      ${meetings.map((m) => `<div class="card"><div class="row"><b>#${m.id}</b><span class="st ${(MS[m.status] || ['', ''])[1]}">${(MS[m.status] || [m.status])[0]}</span><span class="sp2"></span><span class="note">${esc(m.created_at.slice(0, 16))}</span></div><div style="margin:6px 0">${esc(m.agenda)}</div>
+      <div class="chips">${m.reports.map((r) => `<span class="chip">${r.status === 'done' ? '✅' : r.status === 'failed' ? '⚠️' : '⏳'} ${esc(r.name)}</span>`).join('')}</div>
+      ${m.protocol ? `<pre style="margin-top:8px">${esc(m.protocol)}</pre>` : ''}${m.protocol_doc_id ? `<button class="btn full" onclick="openDoc(${m.protocol_doc_id})">Полный протокол</button>` : ''}</div>`).join('')}`;
+  },
+  async docs() {
+    const d = await api('/api/documents');
+    return d.length ? d.map((x) => `<div class="card" onclick="openDoc(${x.id})"><div class="row"><b>${esc(x.title)}</b><span class="sp2"></span><span class="st">${esc(x.kind || '')}</span></div><div class="note">${esc(x.agent_name || '')} · ${esc(x.created_at.slice(0, 16))}</div></div>`).join('') : '<div class="card">Документов пока нет.</div>';
+  },
+  async tech() {
+    const r = await api('/api/radar');
+    const act = r.adoptions.filter((a) => !['adopted', 'rejected', 'blocked'].includes(a.status));
+    return `<div class="card"><div class="row"><span class="note">находок ${r.stats.total || 0} · новых ${r.stats.fresh || 0} · на пилот ${r.stats.pilot || 0}</span><span class="sp2"></span><button class="btn" onclick="radarNow()">Собрать</button></div>${r.digests.length ? `<div class="chips" style="margin-top:8px">${r.digests.slice(0, 6).map((d) => `<button class="chip" onclick="openDoc(${d.id})">${esc(d.title)} · ${esc(d.created_at.slice(5, 10))}</button>`).join('')}</div>` : ''}</div>
+      ${act.map((a) => `<div class="card"><div class="row"><b>${esc(a.title)}</b><span class="sp2"></span><span class="st ${['proposed', 'pilot_done'].includes(a.status) ? 'w' : 'b'}">${esc(a.status_ru)}</span></div><div class="note" style="margin-top:4px">Польза: ${esc(a.benefit)}</div>${['proposed', 'pilot_done'].includes(a.status) ? `<div class="row" style="margin-top:8px"><button class="btn ok" onclick="tdec(${a.id},1)">✅ ${a.status === 'proposed' ? 'Пилот' : 'Внедрить'}</button><button class="btn no" onclick="tdec(${a.id},0)">✖</button></div>` : ''}</div>`).join('')}
+      <div class="k" style="margin:12px 0 6px">Свежие находки</div>${r.items.slice(0, 25).map((i) => `<div class="card"><a href="${/^https?:\/\//.test(i.url) ? esc(i.url) : '#'}" onclick="return openLink(this.href)" style="color:var(--b);text-decoration:none"><b>${esc(i.title)}</b></a><div class="note">${esc(i.assessment || i.summary || '')}</div></div>`).join('')}`;
+  },
+  async marketing() {
+    const [r, so] = await Promise.all([api('/api/marketing'), api('/api/social')]);
+    const ST = { proposed: 'w', approved: 'b', running: 'b', reporting: 'w', done: 'g', rejected: 'r' }, VR = { go: 'масштабировать', iterate: 'ещё тест', kill: 'закрыть' };
+    const f = (v) => (v == null ? '—' : v);
+    return `<div class="card"><div class="row"><span class="note">реклама за месяц ${money(r.ads_month)} · Meta ${r.platforms.meta ? '✓' : 'вручную'} · Google ${r.platforms.google ? '✓' : 'вручную'}</span></div></div>
+      ${r.tests.map((t) => `<div class="card"><div class="row"><b>${esc(t.title)}</b><span class="sp2"></span><span class="st ${ST[t.status] || ''}">${esc(t.status_ru)}</span></div>
+        ${t.project ? `<div class="note">${esc(t.project)}</div>` : ''}
+        <div class="note" style="margin-top:4px">потрачено ${t.spent} из ${t.budget_base} ${r.base}${t.status === 'running' ? ` · день ${t.day}/${t.days}` : ''}</div>
+        <div class="note">визиты ${t.total.visits} · заявки ${t.total.leads} · покупки ${t.total.purchases} · заявка ${f(t.total.cpl)} · клиент ${f(t.total.cac)}</div>
+        ${t.checks.length && !['proposed', 'rejected'].includes(t.status) ? `<div class="note">${t.checks.map((c) => (c.ok ? '✅ ' : '❌ ') + esc(c.name)).join(' · ')}</div>` : ''}
+        ${t.status === 'proposed' ? `<div class="note" style="margin-top:6px">${esc(t.hypothesis)}<br>Кому: ${esc(t.segment)}<br>Оффер: ${esc(t.offer)}<br>Каналы: ${t.channels.map((c) => esc(c.channel) + ' ' + c.budget).join(', ')}</div><div class="row" style="margin-top:8px"><button class="btn ok" onclick="mkDec(${t.id},'approve')">✅ Бюджет ${t.budget} ${esc(t.currency)}</button><button class="btn no" onclick="mkDec(${t.id},'reject')">✖</button></div>` : ''}
+        ${['approved', 'running'].includes(t.status) ? `<div class="row" style="margin-top:8px"><button class="btn no" onclick="mkDec(${t.id},'stop')">⏹ Остановить тест</button></div>` : ''}
+        ${t.status === 'done' && !t.decision ? `<div class="note" style="margin-top:6px">Команда советует: ${VR[t.verdict] || '—'}</div><div class="row" style="margin-top:6px"><button class="btn ok" onclick="mkV(${t.id},'go')">🚀</button><button class="btn" onclick="mkV(${t.id},'iterate')">🔁 Ещё тест</button><button class="btn no" onclick="mkV(${t.id},'kill')">✖ Закрыть</button>${t.report_doc_id ? `<button class="btn" onclick="openDoc(${t.report_doc_id})">Отчёт</button>` : ''}</div>` : ''}
+      </div>`).join('') || '<p class="note">Тестов спроса пока нет.</p>'}
+      <div class="k" style="margin:12px 0 6px">🔑 Права агентов в соцсетях</div>
+      ${so.networks.map((n) => `<div class="card"><div class="row"><b>${esc(n.title)}</b><span class="sp2"></span><span class="st ${n.connected ? 'g' : 'w'}">${n.connected ? 'подключена' : 'нет ключей'}</span></div><select style="margin-top:8px" onchange="setRight('${n.key}', this.value)">${[['auto', 'публикуют сами'], ['approval', 'с моим одобрением'], ['off', 'запрещено']].map(([v, t]) => `<option value="${v}"${n.right === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>`).join('')}`;
+  },
+  async support() {
+    const r = await api('/api/support'); const f = (v) => (v == null ? '—' : v);
+    const FR = { scale: '🚀 Масштабировать', hold: '⏸ Держать', fix: '🔧 Чинить', close: '✖ Закрыть' };
+    return `<div class="grid2"><div class="card"><div class="k">Обращений</div><div class="v">${r.stats.open}</div><div class="note">просрочено ${r.stats.overdue}</div></div><div class="card"><div class="k">Ошибки P0–P1</div><div class="v" style="color:${r.stats.p01 ? 'var(--r)' : 'inherit'}">${r.stats.p01}</div></div></div>
+      ${r.projects.map((p) => `<div class="card"><div class="row"><b>${esc(p.name)}</b><span class="sp2"></span><span class="st b">${esc(STAGE[p.stage] || p.stage)}</span></div>
+        ${p.metrics ? `<div class="note" style="margin-top:4px">выручка 30 дн. ${money(p.metrics.mrr)} · новых за неделю ${p.metrics.new_customers_week} · отток ${f(p.metrics.churn_pct)}% · оценка ${f(p.metrics.score)}</div>` : ''}
+        ${p.budget ? `<div class="note">бюджет этапа: ${p.budget.spent} из ${p.budget.limit} ${ov.base}</div>` : ''}
+        ${p.fate ? `<div class="note" style="margin-top:6px"><b>Судьба (${p.fate.checkpoint} дн.):</b> предлагают «${FR[p.fate.proposal]}» — ${esc(p.fate.reasoning.slice(0, 300))}</div><div class="row" style="margin-top:6px">${Object.entries(FR).map(([k, t]) => `<button class="btn ${k === p.fate.proposal ? 'ok' : ''}" onclick="fateDec(${p.fate.id},'${k}')">${t}</button>`).join('')}</div>` : ''}</div>`).join('') || '<p class="note">Запущенных проектов пока нет.</p>'}
+      ${r.bugs.filter((b) => b.level <= 'P1').map((b) => `<div class="card"><div class="row"><span class="st r">${esc(b.level)}</span><b>${esc(b.title)}</b></div><div class="note">${esc(b.project || '')} · ${esc(b.status)} · затронуто ${b.affected}</div></div>`).join('')}
+      ${r.tickets.filter((t) => t.overdue).map((t) => `<div class="card"><div class="row"><span class="st r">просрочено</span><b>${esc(t.subject || '')}</b></div><div class="note">${esc(t.customer || '')} · ${esc(t.kind_ru)}</div></div>`).join('')}`;
+  },
+  async money() {
+    const [b, l] = await Promise.all([api('/api/bank'), api('/api/ledger')]);
+    return `<div class="grid2"><div class="card"><div class="k">Выручка, месяц</div><div class="v" style="color:var(--g)">${money(ov.revenue_month)}</div></div><div class="card"><div class="k">Расходы, месяц</div><div class="v">${money(ov.expenses_month)}</div></div></div>
+      ${b.balances.length ? `<div class="card">${b.balances.map((x) => `<div class="row"><span class="note">${esc(x.bank)} ${esc(x.name || '')}</span><span class="sp2"></span><b>${(+x.balance).toLocaleString('ru-RU')} ${esc(x.currency)}</b></div>`).join('')}</div>` : ''}
+      ${b.unmatched.length ? `<div class="k" style="margin:10px 0 6px">Сверка: нужно ваше решение</div>${b.unmatched.slice(0, 15).map((t) => `<div class="card"><div class="row"><b style="color:${t.amount > 0 ? 'var(--g)' : 'var(--t)'}">${t.amount > 0 ? '+' : ''}${t.amount} ${esc(t.currency)}</b><span class="note">${esc(t.counterparty || t.description || '')}</span></div><div class="row" style="margin-top:8px"><button class="btn ok" onclick="rtx(${t.id},'${t.amount < 0 ? 'expense' : 'income'}')">${t.amount < 0 ? 'Расход' : 'Доход'}</button><button class="btn" onclick="rtx(${t.id},'internal')">Свой перевод</button><button class="btn" onclick="rtx(${t.id},'ignore')">Игнор</button></div></div>`).join('')}` : ''}
+      <div class="k" style="margin:10px 0 6px">Последние операции</div><div class="card">${l.slice(0, 25).map((x) => `<div class="row" style="padding:4px 0;border-bottom:1px dashed var(--l)"><span class="note">${esc(x.ts.slice(5, 10))}</span><span>${esc(x.note || x.category)}</span><span class="sp2"></span><b style="color:${x.direction === 'in' ? 'var(--g)' : 'var(--t)'}">${x.direction === 'in' ? '+' : '−'}${x.amount} ${esc(x.currency)}</b></div>`).join('') || '<span class="note">Пока пусто</span>'}</div>`;
+  },
+  async team() {
+    const a = await api('/api/agents');
+    return `<p class="note">Включённые сотрудники работают и расходуют Claude API.</p>${a.map((x) => `<div class="card"><div class="row"><b>${esc(x.name)}</b>${x.head ? ' ⭐' : ''}<span class="sp2"></span><label class="note"><input type="checkbox" ${x.enabled ? 'checked' : ''} style="width:auto" onchange="agSet('${x.id}',this.checked)"> в штате</label></div><div class="note">${esc(x.role)} · задач: ${x.done} · ${money(x.cost_month)}</div></div>`).join('')}`;
+  },
+};
+
+async function mkDec(id, a) { if (a !== 'reject' && !(await confirmBox(a === 'approve' ? 'Одобрить бюджет теста?' : 'Остановить тест и его рекламу?'))) return; haptic('medium'); await post(`/api/marketing/tests/${id}/${a}`); toast('Готово'); openSheet('marketing', true); refresh(); }
+async function fateDec(id, d) { if (!(await confirmBox('Решение по проекту принято?'))) return; haptic('medium'); await post('/api/support/fate/' + id, { decision: d }); toast('Решение принято'); openSheet('support', true); refresh(); }
+async function setRight(n, r) { haptic(); await post('/api/social', { network: n, right: r }); toast('Права обновлены'); }
+async function mkV(id, v) { haptic('medium'); await post(`/api/marketing/tests/${id}/verdict`, { verdict: v }); toast('Решение принято'); openSheet('marketing', true); refresh(); }
+async function openDoc(id) { haptic(); const d = await api('/api/documents/' + id); current = null; $('#sh-title').textContent = '📄 ' + d.title; $('#sh-body').innerHTML = `<div class="card"><pre>${esc(d.content)}</pre></div>`; }
+function openLink(u) { if (u.endsWith('#')) return false; if (tg && tg.openLink) { tg.openLink(u); return false; } return true; }
+async function adec(id, a) { if (a === 'approve' && !(await confirmBox('Одобрить действие #' + id + '?'))) return; haptic('medium'); await post(`/api/actions/${id}/${a}`); toast(a === 'approve' ? '✅ Одобрено' : '✖ Отклонено'); refresh(); }
+async function pdec(id, ok) { haptic('medium'); await post(`/api/projects/${id}/${ok ? 'approve' : 'reject'}`); toast(ok ? '✅ Проект утверждён' : '✖ Отклонён'); refresh(); }
+async function tdec(id, ok) { haptic('medium'); await post(`/api/adoptions/${id}/${ok ? 'approve' : 'reject'}`); toast(ok ? '✅ Принято' : '✖ Отклонено'); refresh(); }
+async function mdone(id) { await post(`/api/actions/${id}/done`); toast('Отмечено'); refresh(); }
+async function qans(id, i) { const qs = await api('/api/questions'); const q = qs.find((x) => x.id === id); await post(`/api/questions/${id}/answer`, { answer: q.options[i] }); haptic('medium'); toast('💬 Ответ отправлен'); refresh(); }
+async function qtext(id) { const t = document.getElementById('qa' + id).value.trim(); if (!t) return; await post(`/api/questions/${id}/answer`, { answer: t }); haptic('medium'); toast('💬 Ответ отправлен'); refresh(); }
+async function sendOrder() { const t = $('#oText').value.trim(); if (!t) return toast('Напишите поручение'); const r = await post('/api/orders', { text: t, agent_id: $('#oTo').value, priority: $('#oUrg').checked ? 1 : 2 }); haptic('medium'); toast('📌 Поручено: ' + r.to); $('#oText').value = ''; openSheet('order', true); }
+async function newMeeting() { const a = $('#mAgenda').value.trim(); if (!a) return toast('Напишите повестку'); const p = [...document.querySelectorAll('#mPart .chip.on')].map((e) => e.dataset.id); if (!p.length) return toast('Выберите участников'); const r = await post('/api/meetings', { agenda: a, participants: p }); haptic('medium'); toast(`📣 Совещание #${r.id} созвано`); $('#mAgenda').value = ''; refresh(); }
+async function radarNow() { const r = await post('/api/radar/collect'); toast(`Новых находок: ${r.github + r.hn + r.rss}`); refresh(); }
+async function rtx(id, as) { await post(`/api/bank/${id}/resolve`, { as }); toast('Готово'); refresh(); }
+async function agSet(id, on) { await api('/api/agents/' + id, { method: 'PATCH', body: JSON.stringify({ enabled: on }) }); toast(on ? 'В штате' : 'Выведен из штата'); }
+
+// ================= ОФИС: изометрический 3D-вид сверху =================
+const DCOL = {"admin":"#d4a72c","analytics":"#4f7cff","rnd":"#a855f7","marketing":"#ec4899","sales":"#22c55e","clients":"#14b8a6","quality":"#f97316","security":"#64748b","it":"#3b82f6","support":"#06b6d4","accounting":"#eab308","legal":"#94a3b8","hr":"#f43f5e","crypto_desk":"#f7931a","crypto_quant":"#8b5cf6","crypto_research":"#10b981","crypto_risk":"#ef4444","crypto_treasury":"#facc15","crypto_compliance":"#60a5fa","ai_product":"#e879f9","tech_radar":"#22d3ee"};
+const SKIN = ['#f1c7a5', '#e0ac85', '#c98e66', '#f5d3b8', '#d9a07a'], HAIR = ['#2b2018', '#5a3a22', '#1c1c1c', '#8a5a2b', '#c9a227', '#3b2a20'];
+const TW = 48, TH = 24, ZH = 26;
+const O = { data: null, rooms: [], people: new Map(), cam: { x: 0, y: 0, s: 1 }, fitted: false, raf: 0, timer: 0, sel: null, t: 0 };
+const cv = () => document.getElementById('iso');
+const hash = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
+const shade = (hex, k) => { const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255; r = Math.max(0, Math.min(255, r * k)); g = Math.max(0, Math.min(255, g * k)); b = Math.max(0, Math.min(255, b * k)); return `rgb(${r | 0},${g | 0},${b | 0})`; };
+function iso(x, y, z = 0) { const c = O.cam; return [((x - y) * TW / 2) * c.s + c.x, ((x + y) * TH / 2 - z * ZH) * c.s + c.y]; }
+
+function layout(d) {
+  const rooms = [];
+  const special = [{ key: '_director', name: 'Ваш кабинет', col: '#d4a72c', n: 1 }, { key: '_meeting', name: 'Переговорная', col: '#8d98aa', n: 0 }, { key: '_kitchen', name: 'Кухня и лаунж', col: '#3ddc97', n: 0 }];
+  const depts = d.depts.map((x) => ({ key: x.key, name: x.name, col: DCOL[x.key] || '#5aa9ff', n: d.agents.filter((a) => a.dept === x.key).length }));
+  const adminIdx = depts.findIndex((x) => x.key === 'admin');
+  const admin = adminIdx >= 0 ? depts.splice(adminIdx, 1) : [];
+  const list = [special[0], special[1], special[2], ...admin, ...depts];
+  // Сетка повёрнута на 45°: в изометрии комнаты встают в две колонки по экрану —
+  // офис помещается по ширине телефона и листается вниз.
+  const D = 10.4;
+  list.forEach((r, k) => {
+    const i = k % 2, j = Math.floor(k / 2);
+    const rows = Math.max(1, Math.ceil(r.n / 3));
+    const w = r.key === '_meeting' ? 9 : 7, h = r.key === '_kitchen' || r.key === '_meeting' ? 6 : Math.min(7.4, Math.max(5, 2.6 + rows * 2.2));
+    rooms.push({ ...r, x: (j + i) * D, y: (j - i) * D, w, h });
+  });
+  O.rooms = rooms;
+  // места: стол каждого сотрудника и точки на кухне
+  const kitchen = rooms.find((r) => r.key === '_kitchen');
+  for (const r of rooms) {
+    const staff = d.agents.filter((a) => a.dept === r.key);
+    staff.forEach((a, i) => { a._desk = { x: r.x + 1.4 + (i % 3) * 2.1, y: r.y + 1.7 + Math.floor(i / 3) * 2.2 }; });
+  }
+  const meetingRoom = rooms.find((r) => r.key === '_meeting');
+  const parts = d.meeting ? d.meeting.participants : [];
+  d.agents.forEach((a, i) => {
+    a._kitchen = { x: kitchen.x + 1.2 + ((hash(a.id) % 50) / 50) * (kitchen.w - 2.4), y: kitchen.y + 1.4 + ((hash(a.id + 'y') % 40) / 40) * (kitchen.h - 2.6) };
+    const inMeeting = d.meeting && d.meeting.status === 'collecting' && parts.includes(a.id) && a.state !== 'work';
+    const k = parts.indexOf(a.id);
+    a._target = a.state === 'idle' && !inMeeting ? a._kitchen : inMeeting ? { x: meetingRoom.x + 1.4 + (k % 6) * 1.25, y: meetingRoom.y + (k < 6 ? 1.6 : 4.3) } : { x: a._desk.x + 0.15, y: a._desk.y + 0.75 };
+    a._where = inMeeting ? 'meeting' : a.state === 'idle' ? 'kitchen' : 'desk';
+  });
+}
+
+async function loadOffice() {
+  let d; try { d = await api('/api/office'); } catch (e) { return; }
+  O.data = d; layout(d);
+  for (const a of d.agents) {
+    const p = O.people.get(a.id) || { x: a._target.x, y: a._target.y, phase: Math.random() * 6 };
+    p.a = a; p.tx = a._target.x; p.ty = a._target.y; O.people.set(a.id, p);
+  }
+  for (const id of [...O.people.keys()]) if (!d.agents.some((a) => a.id === id)) O.people.delete(id);
+  $('#oStats').innerHTML = `<span class="st g">⌨ работают ${d.stats.work}</span><span class="st w">⏳ в очереди ${d.stats.queue}</span><span class="st">☕ свободны ${d.stats.idle}</span>${d.stopped ? '<span class="st r">СТОП</span>' : d.paused ? '<span class="st w">пауза</span>' : ''}`;
+  if (!O.fitted) fitOffice();
+  if (O.sel && current === 'agent') openAgent(O.sel, true);
+}
+
+function fitOffice() {
+  const c = cv(); const W = c.clientWidth, H = c.clientHeight;
+  O.cam = { x: 0, y: 0, s: 1 };
+  let minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+  for (const r of O.rooms) for (const [px, py] of [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]]) { const [sx, sy] = iso(px, py); minx = Math.min(minx, sx); maxx = Math.max(maxx, sx); miny = Math.min(miny, sy - 40); maxy = Math.max(maxy, sy); }
+  O.cam.s = Math.max(0.3, Math.min(1.4, W / (maxx - minx + 16))); // по ширине экрана, вниз — листать
+  O.cam.x = W / 2 - ((minx + maxx) / 2) * O.cam.s; O.cam.y = 24 - miny * O.cam.s;
+  O.fitted = true;
+}
+
+function poly(ctx, pts, fill, stroke) { ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); } }
+function box(ctx, x, y, w, d, z0, h, col) { // изометрический параллелепипед
+  const A = iso(x, y, z0 + h), B = iso(x + w, y, z0 + h), C = iso(x + w, y + d, z0 + h), D = iso(x, y + d, z0 + h);
+  const B0 = iso(x + w, y, z0), C0 = iso(x + w, y + d, z0), D0 = iso(x, y + d, z0);
+  poly(ctx, [D, C, C0, D0], shade(col, 0.72)); poly(ctx, [B, C, C0, B0], shade(col, 0.55)); poly(ctx, [A, B, C, D], col);
+}
+
+function drawRoom(ctx, r) {
+  const col = r.col, base = '#1a2130';
+  poly(ctx, [iso(r.x, r.y), iso(r.x + r.w, r.y), iso(r.x + r.w, r.y + r.h), iso(r.x, r.y + r.h)], shade(col, 0.22), null);
+  ctx.globalAlpha = 0.12; ctx.strokeStyle = col; ctx.lineWidth = 1;
+  for (let i = 1; i < r.w; i++) { const a = iso(r.x + i, r.y), b = iso(r.x + i, r.y + r.h); ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); }
+  for (let j = 1; j < r.h; j++) { const a = iso(r.x, r.y + j), b = iso(r.x + r.w, r.y + j); ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+  const WH = 1.1; // задние стены
+  poly(ctx, [iso(r.x, r.y, 0), iso(r.x + r.w, r.y, 0), iso(r.x + r.w, r.y, WH), iso(r.x, r.y, WH)], shade(base, 1.25));
+  poly(ctx, [iso(r.x, r.y, 0), iso(r.x, r.y + r.h, 0), iso(r.x, r.y + r.h, WH), iso(r.x, r.y, WH)], shade(base, 0.95));
+  poly(ctx, [iso(r.x, r.y, WH), iso(r.x + r.w, r.y, WH), iso(r.x + r.w, r.y, WH + 0.06), iso(r.x, r.y, WH + 0.06)], col);
+  poly(ctx, [iso(r.x, r.y, WH), iso(r.x, r.y + r.h, WH), iso(r.x, r.y + r.h, WH + 0.06), iso(r.x, r.y, WH + 0.06)], shade(col, 0.8));
+  // табличка с названием на задней стене
+  const [lx, ly] = iso(r.x + r.w / 2, r.y, 0.62);
+  ctx.save(); ctx.translate(lx, ly); ctx.transform(1, 0.5, 0, 1, 0, 0);
+  ctx.font = `700 ${Math.max(8, 11 * O.cam.s)}px -apple-system,system-ui,sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = col; ctx.fillText(r.name.length > 24 ? r.name.slice(0, 23) + '…' : r.name, 0, 0); ctx.restore();
+}
+
+function drawDesk(ctx, x, y, col, on) {
+  box(ctx, x - 0.55, y - 0.3, 1.1, 0.6, 0.38, 0.06, '#6e4a2e');
+  box(ctx, x - 0.5, y - 0.25, 0.08, 0.08, 0, 0.38, '#3b2a1d'); box(ctx, x + 0.42, y - 0.25, 0.08, 0.08, 0, 0.38, '#3b2a1d');
+  box(ctx, x - 0.25, y - 0.24, 0.5, 0.06, 0.44, 0.34, '#11161e');
+  if (on) { const a = iso(x - 0.21, y - 0.18, 0.48), b = iso(x + 0.21, y - 0.18, 0.48), c = iso(x + 0.21, y - 0.18, 0.74), d = iso(x - 0.21, y - 0.18, 0.74); poly(ctx, [a, b, c, d], shade(col, 1.1)); }
+}
+
+function drawPerson(ctx, p, t) {
+  const a = p.a, col = DCOL[a.dept] || '#5aa9ff', s = O.cam.s;
+  const moving = Math.hypot(p.tx - p.x, p.ty - p.y) > 0.05;
+  const bob = moving ? Math.abs(Math.sin(t * 9 + p.phase)) * 0.08 : a.state === 'work' ? Math.sin(t * 14 + p.phase) * 0.015 : 0;
+  const [sx, sy] = iso(p.x, p.y, 0);
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(sx, sy, 9 * s, 4.5 * s, 0, 0, 7); ctx.fill();
+  const [bx, by] = iso(p.x, p.y, 0.62 + bob);
+  ctx.fillStyle = shade(col, 0.85); ctx.beginPath(); ctx.roundRect(bx - 7 * s, by, 14 * s, 15 * s, 5 * s); ctx.fill(); // тело
+  ctx.fillStyle = '#2a313d'; ctx.fillRect(bx - 6 * s, by + 14 * s, 5 * s, 6 * s); ctx.fillRect(bx + 1 * s, by + 14 * s, 5 * s, 6 * s);
+  const h = hash(a.id); const [hx, hy] = iso(p.x, p.y, 0.95 + bob);
+  ctx.fillStyle = SKIN[h % SKIN.length]; ctx.beginPath(); ctx.arc(hx, hy, 6.5 * s, 0, 7); ctx.fill();
+  ctx.fillStyle = HAIR[(h >> 3) % HAIR.length]; ctx.beginPath(); ctx.arc(hx, hy - 1.5 * s, 6.6 * s, Math.PI, 0); ctx.fill();
+  if (a.head) { ctx.fillStyle = '#d4a72c'; ctx.beginPath(); ctx.arc(hx + 6 * s, hy - 7 * s, 2.2 * s, 0, 7); ctx.fill(); }
+  if (O.sel === a.id) { ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(sx, sy, 13 * s, 6.5 * s, 0, 0, 7); ctx.stroke(); }
+  p._hit = [hx, hy + 10 * s];
+  // пузырь: чем занят
+  const icon = a._where === 'meeting' ? '📣' : a.state === 'work' ? '⌨' : a.state === 'queue' ? '⏳' : a.state === 'pause' ? '⏸' : '☕';
+  let text = '';
+  if (s >= 0.75 || O.sel === a.id) text = a._where === 'meeting' ? 'на совещании' : a.state === 'work' ? (a.current || '') : a.state === 'queue' ? `в очереди: ${a.queued}` : a.state === 'pause' ? 'пауза' : '';
+  const name = a.name.split(' ')[0];
+  ctx.font = `600 ${Math.max(8, 9.5 * s)}px -apple-system,system-ui,sans-serif`; ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(236,240,246,.9)'; ctx.fillText(name, sx, sy + 13 * s);
+  const label = text ? `${icon} ${text.length > 26 ? text.slice(0, 25) + '…' : text}` : icon;
+  const tw = ctx.measureText(label).width + 10 * s;
+  const yb = hy - 22 * s;
+  ctx.fillStyle = a.state === 'work' ? 'rgba(20,50,31,.92)' : a._where === 'meeting' ? 'rgba(58,50,32,.92)' : 'rgba(21,27,36,.88)';
+  ctx.beginPath(); ctx.roundRect(sx - tw / 2, yb - 11 * s, tw, 15 * s, 6 * s); ctx.fill();
+  ctx.fillStyle = a.state === 'work' ? '#9df0c5' : a._where === 'meeting' ? '#ffd166' : '#c9d2de'; ctx.fillText(label, sx, yb);
+}
+
+function drawSpecial(ctx, r, t) {
+  if (r.key === '_director') {
+    const x = r.x + 3.5, y = r.y + 2.3; drawDesk(ctx, x, y, '#d4a72c', true);
+    box(ctx, x - 1.9, y - 0.3, 0.9, 0.6, 0, 0.9, '#3b2a1d'); // шкаф
+    const [sx, sy] = iso(x + 0.15, y + 0.9, 1.3); ctx.font = `700 ${Math.max(9, 11 * O.cam.s)}px -apple-system,system-ui,sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd166'; ctx.fillText('👑 Вы', sx, sy);
+  }
+  if (r.key === '_meeting') {
+    box(ctx, r.x + 1.1, r.y + 2.4, 6.8, 1.3, 0.36, 0.08, '#4a3a2a');
+    for (let i = 0; i < 4; i++) box(ctx, r.x + 1.6 + i * 1.8, r.y + 2.7, 0.12, 0.7, 0, 0.36, '#2f2318');
+    const m = O.data && O.data.meeting;
+    if (m) { const [sx, sy] = iso(r.x + 4.5, r.y + 3, 2.2); ctx.font = `600 ${Math.max(8, 10 * O.cam.s)}px -apple-system,system-ui,sans-serif`; ctx.textAlign = 'center'; const tx = '📣 ' + (m.agenda.length > 30 ? m.agenda.slice(0, 29) + '…' : m.agenda); const w = ctx.measureText(tx).width + 12; ctx.fillStyle = 'rgba(58,50,32,.95)'; ctx.beginPath(); ctx.roundRect(sx - w / 2, sy - 12, w, 17, 7); ctx.fill(); ctx.fillStyle = '#ffd166'; ctx.fillText(tx, sx, sy); }
+  }
+  if (r.key === '_kitchen') {
+    box(ctx, r.x + 0.3, r.y + 0.3, 3.2, 0.6, 0, 0.55, '#3b4250'); box(ctx, r.x + 0.3, r.y + 0.3, 3.2, 0.6, 0.55, 0.05, '#c9d2de');
+    box(ctx, r.x + 2.6, r.y + 2.6, 1.4, 1.4, 0.34, 0.06, '#6e4a2e'); box(ctx, r.x + 3.2, r.y + 3.2, 0.2, 0.2, 0, 0.34, '#3b2a1d');
+    box(ctx, r.x + 0.6, r.y + 3.6, 0.9, 1.8, 0, 0.3, '#2f6f5f'); // диван
+  }
+}
+
+function frame(ts) {
+  const c = cv(); if (!c || document.getElementById('office').hidden) { O.raf = 0; return; }
+  const t = ts / 1000, dt = Math.min(0.05, t - (O.t || t)); O.t = t;
+  const dpr = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
+  if (c.width !== W * dpr || c.height !== H * dpr) { c.width = W * dpr; c.height = H * dpr; }
+  const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  if (!O.data) { O.raf = requestAnimationFrame(frame); return; }
+  // движение: идём к цели, свободные бродят по кухне
+  for (const p of O.people.values()) {
+    const a = p.a, dx = p.tx - p.x, dy = p.ty - p.y, dist = Math.hypot(dx, dy), sp = 1.6 * dt;
+    if (dist > 0.02) { p.x += (dx / dist) * Math.min(sp, dist); p.y += (dy / dist) * Math.min(sp, dist); }
+    else if (a._where === 'kitchen' && Math.random() < dt * 0.25) { const k = O.rooms.find((r) => r.key === '_kitchen'); p.tx = k.x + 1 + Math.random() * (k.w - 2); p.ty = k.y + 1.2 + Math.random() * (k.h - 2.4); }
+  }
+  for (const r of O.rooms) drawRoom(ctx, r);
+  const items = [];
+  for (const r of O.rooms) {
+    if (r.key.startsWith('_')) items.push({ d: r.x + r.y + 2, f: () => drawSpecial(ctx, r, t) });
+  }
+  for (const p of O.people.values()) {
+    const a = p.a;
+    if (a._desk) items.push({ d: a._desk.x + a._desk.y, f: () => drawDesk(ctx, a._desk.x, a._desk.y, DCOL[a.dept] || '#5aa9ff', a.state === 'work') });
+    items.push({ d: p.x + p.y + 0.01, f: () => drawPerson(ctx, p, t) });
+  }
+  items.sort((u, v) => u.d - v.d).forEach((i) => i.f());
+  O.raf = requestAnimationFrame(frame);
+}
+
+// жесты: перетаскивание, щипок, колесо, тап по сотруднику
+(function gestures() {
+  const pts = new Map(); let start = null, pinch = null;
+  const el = () => cv();
+  document.addEventListener('pointerdown', (e) => { if (e.target !== el()) return; el().setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); start = { x: e.clientX, y: e.clientY, cx: O.cam.x, cy: O.cam.y, moved: false };
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), s: O.cam.s, mx: (a[0] + b[0]) / 2, my: (a[1] + b[1]) / 2, cx: O.cam.x, cy: O.cam.y }; } });
+  document.addEventListener('pointermove', (e) => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size === 2 && pinch) { const [a, b] = [...pts.values()]; const k = Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d; zoomAt(pinch.mx, pinch.my, Math.max(0.3, Math.min(2.5, pinch.s * k)), pinch); start.moved = true; return; }
+    if (start) { const dx = e.clientX - start.x, dy = e.clientY - start.y; if (Math.hypot(dx, dy) > 6) start.moved = true; O.cam.x = start.cx + dx; O.cam.y = start.cy + dy; } });
+  const up = (e) => { if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
+    if (start && !start.moved && pts.size === 0) tapAt(e.clientX, e.clientY);
+    if (pts.size === 0) start = null; else { const [p] = [...pts.values()]; start = { x: p[0], y: p[1], cx: O.cam.x, cy: O.cam.y, moved: true }; } };
+  document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
+  document.addEventListener('wheel', (e) => { if (e.target !== el()) return; e.preventDefault(); zoomAt(e.clientX, e.clientY, Math.max(0.3, Math.min(2.5, O.cam.s * (e.deltaY < 0 ? 1.12 : 0.89)))); }, { passive: false });
+})();
+function zoomAt(mx, my, ns, base) {
+  const r = cv().getBoundingClientRect(); const px = mx - r.left, py = my - r.top;
+  const b = base || { s: O.cam.s, cx: O.cam.x, cy: O.cam.y };
+  const k = ns / b.s; O.cam.x = px - (px - b.cx) * k; O.cam.y = py - (py - b.cy) * k; O.cam.s = ns;
+}
+function tapAt(cx, cy) {
+  const r = cv().getBoundingClientRect(); const x = cx - r.left, y = cy - r.top;
+  let best = null, bd = 26 * Math.max(0.7, O.cam.s);
+  for (const p of O.people.values()) { if (!p._hit) continue; const d = Math.hypot(p._hit[0] - x, p._hit[1] - y); if (d < bd) { bd = d; best = p; } }
+  if (best) { haptic(); openAgent(best.a.id); return; }
+  // тап по комнате отдела — состав отдела
+  for (const rm of O.rooms) { if (rm.key.startsWith('_')) { if (rm.key === '_meeting') { if (inRoom(rm, x, y)) return openSheet('meetings'); } continue; } if (inRoom(rm, x, y)) return openDept(rm); }
+}
+function inRoom(rm, x, y) {
+  const P = [iso(rm.x, rm.y), iso(rm.x + rm.w, rm.y), iso(rm.x + rm.w, rm.y + rm.h), iso(rm.x, rm.y + rm.h)];
+  let inside = false; for (let i = 0, j = 3; i < 4; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside; }
+  return inside;
+}
+const SRU = { work: ['работает', 'g'], queue: ['ждёт в очереди', 'w'], pause: ['на паузе', 'w'], idle: ['свободен(на)', ''] };
+async function openAgent(id, silent) {
+  const a = O.data.agents.find((x) => x.id === id); if (!a) return;
+  O.sel = id; current = 'agent';
+  $('#sh-title').textContent = a.name; $('#sheet').classList.add('open'); if (tg) tg.BackButton.show();
+  const tasks = await api(`/api/agents/${id}/tasks`).catch(() => []);
+  const st = a._where === 'meeting' ? ['на совещании', 'w'] : SRU[a.state];
+  $('#sh-body').innerHTML = `<div class="card"><div class="row"><span style="width:10px;height:10px;border-radius:5px;background:${DCOL[a.dept] || '#5aa9ff'}"></span><b>${esc(a.role)}</b>${a.head ? ' ⭐' : ''}<span class="sp2"></span><span class="st ${st[1]}">${st[0]}</span></div>
+    ${a.current ? `<div style="margin-top:8px">⌨ Сейчас: <b>${esc(a.current)}</b></div>` : ''}
+    <div class="note" style="margin-top:6px">В очереди: ${a.queued} · сделано сегодня: ${a.done_today} · Claude сегодня: ${money(a.cost_today)}</div>
+    ${a.last_title ? `<div class="note" style="margin-top:6px">Последнее: ${esc(a.last_title)}</div>${a.last_result ? `<pre class="note" style="margin-top:4px">${esc(a.last_result)}</pre>` : ''}` : ''}
+    <button class="btn gold full" onclick="orderTo('${a.id}')">✍️ Дать поручение</button></div>
+    <div class="k" style="margin:10px 0 6px">Задачи</div>${tasks.map((t) => `<div class="card"><div class="row"><b>${esc(t.title)}</b><span class="sp2"></span><span class="st ${(TST[t.status] || ['', ''])[1]}">${(TST[t.status] || [t.status])[0]}</span></div>${t.result ? `<pre class="note" style="margin-top:4px">${esc(t.result)}</pre>` : ''}${t.error ? `<div class="note" style="color:var(--r)">${esc(t.error)}</div>` : ''}</div>`).join('') || '<p class="note">Пока нет.</p>'}`;
+}
+function openDept(rm) {
+  const staff = O.data.agents.filter((a) => a.dept === rm.key);
+  current = 'dept'; O.sel = null; $('#sh-title').textContent = rm.name; $('#sheet').classList.add('open'); if (tg) tg.BackButton.show();
+  $('#sh-body').innerHTML = staff.map((a) => { const st = a._where === 'meeting' ? ['на совещании', 'w'] : SRU[a.state]; return `<div class="card" onclick="openAgent('${a.id}')"><div class="row"><b>${esc(a.name)}</b>${a.head ? ' ⭐' : ''}<span class="sp2"></span><span class="st ${st[1]}">${st[0]}</span></div><div class="note">${esc(a.role)}</div>${a.current ? `<div style="margin-top:4px">⌨ ${esc(a.current)}</div>` : ''}</div>`; }).join('')
+    + `<button class="btn gold full" onclick="orderToDept('${rm.key}')">✍️ Поручить отделу</button>`;
+}
+async function orderTo(id) { await openSheet('order'); const s = document.getElementById('oTo'); if (s) s.value = id; }
+async function orderToDept(key) { const head = O.data.agents.find((a) => a.dept === key && a.head) || O.data.agents.find((a) => a.dept === key); orderTo(head ? head.id : 'coo'); }
+
+function enterOffice() {
+  haptic('medium'); closeSheet();
+  document.getElementById('app').hidden = true; document.getElementById('office').hidden = false;
+  if (tg) { tg.BackButton.show(); }
+  O.fitted = false; loadOffice(); clearInterval(O.timer); O.timer = setInterval(loadOffice, 8000);
+  if (!O.raf) O.raf = requestAnimationFrame(frame);
+}
+function leaveOffice() {
+  document.getElementById('office').hidden = true; document.getElementById('app').hidden = false; clearInterval(O.timer); O.sel = null;
+  if (tg && !current) tg.BackButton.hide();
+}
+
+if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor('#0c1016'); tg.setBackgroundColor('#0c1016'); } catch {} }
+paintScene(); setInterval(paintScene, 60000);
+if (!AUTH) showLogin(); else refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>

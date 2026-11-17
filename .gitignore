@@ -3,3 +3,10 @@ node_modules/
 *.log
 .env
 .env.*
+!.env.example
+server/var/
+*.db
+*.db-wal
+*.db-shm
+deploy/secrets/
+*.pem

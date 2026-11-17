@@ -1,0 +1,12 @@
+{$DOMAIN} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	# Кабинет в Telegram открывается и во встроенном окне web.telegram.org — ему разрешаем встраивание
+	@notg not path /tg*
+	header @notg X-Frame-Options "DENY"
+	header /tg* Content-Security-Policy "frame-ancestors https://web.telegram.org https://*.telegram.org"
+	reverse_proxy app:8080
+}
