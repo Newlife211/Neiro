@@ -46,6 +46,14 @@ CREATE TABLE IF NOT EXISTS bank_tx (
   amount_base REAL, description TEXT, counterparty TEXT, card_id TEXT, kind TEXT, status TEXT NOT NULL DEFAULT 'new',
   action_id INTEGER, ledger_id INTEGER, note TEXT, raw TEXT, created_at TEXT DEFAULT (datetime('now')), UNIQUE(provider, ext_id));
 CREATE INDEX IF NOT EXISTS bank_tx_status ON bank_tx(status);
+CREATE TABLE IF NOT EXISTS radar_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, ext_id TEXT NOT NULL, title TEXT, url TEXT, summary TEXT, signal REAL DEFAULT 0,
+  published_at TEXT, fetched_at TEXT DEFAULT (datetime('now')), verdict TEXT, relevance REAL, assessment TEXT, assessed_by TEXT, assessed_at TEXT, UNIQUE(source, ext_id));
+CREATE INDEX IF NOT EXISTS radar_verdict ON radar_items(verdict);
+CREATE TABLE IF NOT EXISTS adoptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, summary TEXT, benefit TEXT, cost TEXT, risk TEXT, plan TEXT, owner_dept TEXT,
+  items TEXT, status TEXT NOT NULL, proposed_by TEXT, security_note TEXT, pilot_task_id INTEGER, result TEXT, director_note TEXT,
+  created_at TEXT DEFAULT (datetime('now')), decided_at TEXT);
 CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), actor TEXT, event TEXT, data TEXT);
 `;
 

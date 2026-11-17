@@ -9,7 +9,7 @@
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 header{display:flex;gap:12px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--l);flex-wrap:wrap;position:sticky;top:0;background:var(--bg);z-index:2}
 .logo{font-weight:800;letter-spacing:.12em;color:var(--gold)}.sp{flex:1}
-nav{display:flex;gap:4px;flex-wrap:wrap}nav button{background:none;border:0;color:var(--m);padding:8px 10px;border-radius:8px;cursor:pointer;font:inherit}
+nav{display:flex;gap:4px;flex-wrap:wrap}nav button{background:none;border:0;color:var(--m);padding:7px 8px;border-radius:8px;cursor:pointer;font:inherit;font-size:13px}
 nav button.on{background:var(--p);color:var(--t)}.badge{background:var(--r);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;margin-left:4px}
 main{padding:18px;max-width:1200px;margin:0 auto}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
@@ -45,7 +45,7 @@ pre{white-space:pre-wrap;background:#0f141c;border:1px solid var(--l);border-rad
 <main id="main"></main>
 </div>
 <script>
-const TABS=[['ov','Обзор'],['dec','Решения'],['tasks','Задачи'],['proj','Проекты'],['agents','Агенты'],['docs','Документы'],['money','Деньги'],['recon','Сверка'],['feed','Лента']];
+const TABS=[['ov','Обзор'],['dec','Решения'],['tasks','Задачи'],['proj','Проекты'],['tech','Технологии'],['agents','Агенты'],['docs','Документы'],['money','Деньги'],['recon','Сверка'],['feed','Лента']];
 let tab='ov',T=localStorage.getItem('ns_token')||'',ov=null,timer=null;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -57,7 +57,7 @@ const post=(p,b={})=>api(p,{method:'POST',body:JSON.stringify(b)});
 function login(){T=$('#tok').value.trim();api('/api/overview').then(()=>{localStorage.setItem('ns_token',T);start()}).catch(e=>$('#lerr').textContent='Неверный токен')}
 function logout(){localStorage.removeItem('ns_token');T='';$('#app').hidden=true;$('#login').hidden=false;clearInterval(timer)}
 function start(){$('#login').hidden=true;$('#app').hidden=false;render();clearInterval(timer);timer=setInterval(()=>{if(!document.querySelector('textarea:focus,input:focus'))render()},10000)}
-function nav(){const n=ov?ov.pending_approvals+ov.projects.filter(p=>p.stage==='decision').length:0,rn=ov?ov.bank_unmatched:0;$('#nav').innerHTML=TABS.map(([k,t])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')">${t}${k==='dec'&&n?`<span class="badge">${n}</span>`:''}${k==='recon'&&rn?`<span class="badge">${rn}</span>`:''}</button>`).join('');
+function nav(){const n=ov?ov.pending_approvals+ov.projects.filter(p=>p.stage==='decision').length:0,rn=ov?ov.bank_unmatched:0,tn=ov?ov.adoptions_waiting:0;$('#nav').innerHTML=TABS.map(([k,t])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')">${t}${k==='dec'&&n?`<span class="badge">${n}</span>`:''}${k==='tech'&&tn?`<span class="badge">${tn}</span>`:''}${k==='recon'&&rn?`<span class="badge">${rn}</span>`:''}</button>`).join('');
  $('#stopBtn').textContent=ov&&ov.stopped?'▶ Снять СТОП':'🛑 СТОП';$('#pauseBtn').textContent=ov&&ov.paused?'▶ Продолжить':'⏸ Пауза'}
 function go(k){tab=k;render()}
 async function toggle(k){const v=!ov[k];if(k==='stopped'&&v&&!confirm('Включить СТОП? Агенты ничего не будут отправлять и тратить, пока вы его не снимете.'))return;await post('/api/control',{[k]:v});render()}
@@ -89,6 +89,19 @@ async agents(){const a=await api('/api/agents');return `<p class="note">Вклю
 async docs(){const d=await api('/api/documents');return d.length?`<div class="card"><table><tr><th>Документ</th><th>Автор</th><th>Дата</th></tr>${d.map(x=>`<tr style="cursor:pointer" onclick="showDoc(${x.id})"><td><b>${esc(x.title)}</b> <span class="st">${esc(x.kind||'')}</span></td><td>${esc(x.agent_name||'')}</td><td class="note">${esc(x.created_at)}</td></tr>`).join('')}</table></div>`:'<p class="note">Документов пока нет.</p>'},
 async money(){const l=await api('/api/ledger');return `<div class="card"><h4 style="margin-top:0">Добавить операцию вручную</h4><div class="row"><select id="md" style="width:120px"><option value="in">Доход</option><option value="out">Расход</option></select><input id="ma" type="number" step="0.01" placeholder="Сумма" style="width:120px"><input id="mc" value="${ov.base}" style="width:80px"><input id="mn" placeholder="Комментарий" style="flex:1"><button class="btn gold" onclick="addLedger()">Добавить</button></div></div>
  <div class="card"><table><tr><th>Дата</th><th>Тип</th><th>Сумма</th><th>Источник</th><th>Комментарий</th></tr>${l.map(x=>`<tr><td class="note">${esc(x.ts)}</td><td>${x.direction==='in'?'<span style="color:var(--g)">доход</span>':'расход'} · ${esc(x.category)}</td><td>${x.amount} ${esc(x.currency)}${x.currency!==ov.base?` <span class="note">(${money(x.amount_base)})</span>`:''}</td><td>${esc(x.source)}</td><td class="note">${esc(x.note||'')}</td></tr>`).join('')}</table></div>`},
+async tech(){const r=await api('/api/radar');const SRC=s=>s==='github'?'GitHub':s==='hn'?'Hacker News':s.replace('rss:','');const VR={pilot:'пилот',watch:'наблюдать',ignore:'неинтересно'};
+ const ad=a=>`<div class="card"><div class="row"><b>#${a.id} ${esc(a.title)}</b><span class="st ${['proposed','pilot_done'].includes(a.status)?'pending':a.status==='adopted'?'done':['rejected','blocked'].includes(a.status)?'failed':'running'}">${esc(a.status_ru)}</span><span class="sp"></span><span class="note">${esc(a.proposer||'')} · внедряет: ${esc(a.owner_dept)}</span></div>
+ ${a.summary?`<p>${esc(a.summary)}</p>`:''}<div class="note"><b>Польза:</b> ${esc(a.benefit)}</div><div class="note"><b>Стоимость:</b> ${esc(a.cost||'—')} · <b>Риски:</b> ${esc(a.risk||'—')}</div><div class="note"><b>План пилота:</b> ${esc(a.plan)}</div>
+ ${a.security_note?`<div class="note"><b>Безопасность:</b> ${esc(a.security_note)}</div>`:''}${a.result?`<div class="note"><b>Итоги пилота:</b> ${esc(a.result)}</div>`:''}
+ ${a.status==='proposed'?`<div class="row" style="margin-top:8px"><button class="btn ok" onclick="adec(${a.id},'approve')">✅ Запустить пилот</button><button class="btn no" onclick="adec(${a.id},'reject')">✖ Отклонить</button></div>`:''}
+ ${a.status==='pilot_done'?`<div class="row" style="margin-top:8px"><button class="btn ok" onclick="adec(${a.id},'approve')">✅ Внедрить</button><button class="btn no" onclick="adec(${a.id},'reject')">✖ Отказаться</button></div>`:''}</div>`;
+ const act=r.adoptions.filter(a=>!['adopted','rejected','blocked'].includes(a.status)),done=r.adoptions.filter(a=>['adopted','rejected','blocked'].includes(a.status));
+ return `<div class="card"><div class="row"><h4 style="margin:0">🛰 Технологическая разведка</h4><span class="sp"></span><span class="note">находок: ${r.stats.total||0} · новых: ${r.stats.fresh||0} · на пилот: ${r.stats.pilot||0} · наблюдаем: ${r.stats.watch||0}</span><button class="btn gold" onclick="radarNow()">Собрать сейчас</button></div>
+ <p class="note">Каждое утро отдел собирает GitHub, Hacker News и блоги ИИ-компаний, оценивает пользу для компании и присылает дайджест в Telegram. Путь любой новинки: предложение → ваше решение → проверка безопасности → пилот → ваше решение о внедрении.</p>
+ ${r.digests.length?`<div class="row">${r.digests.map(d=>`<button class="btn" onclick="showDoc(${d.id})">${esc(d.title)} · ${esc(d.created_at.slice(5,10))}</button>`).join('')}</div>`:''}</div>
+ <h3>Внедрения в работе</h3>${act.length?act.map(ad).join(''):'<p class="note">Пока нет предложений.</p>'}
+ <div class="card"><h4 style="margin-top:0">Находки</h4><table><tr><th>Источник</th><th>Что</th><th>Вердикт</th></tr>${r.items.map(i=>`<tr><td class="note">${esc(SRC(i.source))}</td><td><a href="${/^https?:\/\//.test(i.url)?esc(i.url):'#'}" target="_blank" rel="noopener noreferrer" style="color:var(--b)">${esc(i.title)}</a><div class="note">${esc(i.assessment||i.summary||'')}</div></td><td>${i.verdict?`<span class="st ${i.verdict==='pilot'?'pending':i.verdict==='watch'?'running':''}">${VR[i.verdict]}${i.relevance!=null?' · '+i.relevance:''}</span>`:'<span class="note">новое</span>'}</td></tr>`).join('')}</table></div>
+ ${done.length?`<h3>Архив решений</h3>${done.map(ad).join('')}`:''}`},
 async recon(){const b=await api('/api/bank');const fx=b.fx;const RS={new:'новая',unmatched:'нужно решение',matched:'сверено',payout:'выплата провайдера',internal:'внутренняя',ignored:'игнор'};
  const amt=t=>`<b style="color:${t.amount>0?'var(--g)':'var(--t)'}">${t.amount>0?'+':''}${t.amount} ${esc(t.currency)}</b>`;
  return `<div class="card"><div class="row"><h4 style="margin:0">Банки и курсы</h4><span class="sp"></span><button class="btn gold" onclick="syncBank()">Обновить сейчас</button></div>
@@ -101,6 +114,8 @@ async recon(){const b=await api('/api/bank');const fx=b.fx;const RS={new:'нов
  <div class="card"><h4 style="margin-top:0">Последние операции банка</h4><table><tr><th>Дата</th><th>Сумма</th><th>Контрагент</th><th>Статус</th></tr>${b.recent.map(t=>`<tr><td class="note">${esc((t.ts||'').slice(0,10))}</td><td>${amt(t)}</td><td>${esc(t.counterparty||t.description||'')}${t.action_id?` <span class="note">трата #${t.action_id}</span>`:''}</td><td><span class="st ${t.status==='unmatched'?'pending':t.status==='matched'?'done':''}">${RS[t.status]||t.status}</span></td></tr>`).join('')}</table></div>`},
 async feed(){const f=await api('/api/feed');return `<div class="card feed">${f.map(x=>`<div class="${x.level}"><span class="note">${esc(x.ts)}</span> ${esc(x.icon)} ${esc(x.text)}</div>`).join('')}</div>`},
 };
+async function adec(id,a){await post(`/api/adoptions/${id}/${a}`);render()}
+async function radarNow(){const r=await post('/api/radar/collect');alert(`Новых: GitHub ${r.github}, Hacker News ${r.hn}, блоги ${r.rss}${r.errors.length?`. Недоступно: ${r.errors.length}`:''}${r.task?'. Дайджест поставлен Виктору Ларину.':''}`);render()}
 async function syncBank(){const r=await post('/api/bank/sync');alert(`Новых операций: ${r.added}. Сверено картами: ${r.cards}, связано: ${r.linked}, выплат провайдеров: ${r.payouts}, требуют решения: ${r.unmatched}`);render()}
 async function resolveTx(id,as){const c=document.getElementById('cat'+id);await post(`/api/bank/${id}/resolve`,{as,category:c?c.value:null});render()}
 async function act(id,a){if(a==='approve'&&!confirm('Одобрить действие #'+id+'?'))return;await post(`/api/actions/${id}/${a}`);render()}

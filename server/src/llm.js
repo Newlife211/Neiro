@@ -9,7 +9,8 @@ export function createLLM(ctx) {
     const pin = cfg.anthropic.priceIn[tier] ?? cfg.anthropic.priceIn.worker;
     const pout = cfg.anthropic.priceOut[tier] ?? cfg.anthropic.priceOut.worker;
     const inTok = (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0) * 1.25 + (usage.cache_read_input_tokens || 0) * 0.1;
-    const usd = (inTok * pin + (usage.output_tokens || 0) * pout) / 1e6;
+    const searches = usage.server_tool_use?.web_search_requests || 0;
+    const usd = (inTok * pin + (usage.output_tokens || 0) * pout) / 1e6 + searches * (cfg.anthropic.priceWebSearch ?? 10) / 1000;
     // USD → базовая валюта через курсы из конфига
     return round2((usd / (cfg.fx.USD || 1)) * (cfg.fx[cfg.baseCurrency] || 1) * 10000) / 10000;
   }

@@ -37,6 +37,8 @@ export function buildConfig(env = process.env) {
       // Цены за 1 млн токенов в USD. ОБЯЗАТЕЛЬНО сверьте с https://www.anthropic.com/pricing перед запуском.
       priceIn: { worker: num(env.PRICE_IN_WORKER, 3), lead: num(env.PRICE_IN_LEAD, 15) },
       priceOut: { worker: num(env.PRICE_OUT_WORKER, 15), lead: num(env.PRICE_OUT_LEAD, 75) },
+      // Веб-поиск Claude: цена за 1000 запросов в USD (сверьте на anthropic.com/pricing)
+      priceWebSearch: num(env.PRICE_WEB_SEARCH, 10),
       maxTokens: num(env.LLM_MAX_TOKENS, 2048),
       maxTurns: num(env.AGENT_MAX_TURNS, 8),
     },

@@ -14,6 +14,7 @@ import { createHttp } from './http.js';
 import { revolutConfig, revolutClient } from './revolut.js';
 import { payseraConfig } from './bank.js';
 import { applyRates } from './fx.js';
+import { radarConfig } from './radar.js';
 
 const log = {
   info: (...a) => console.log(new Date().toISOString(), '[info]', ...a),
@@ -28,6 +29,7 @@ export function createApp(cfg, opts = {}) {
   ctx.revolutCfg = opts.revolutCfg || revolutConfig();
   ctx.revolut = opts.revolut || (ctx.revolutCfg.enabled ? revolutClient(ctx.revolutCfg, db, ctx.fetch) : null);
   ctx.paysera = opts.paysera || payseraConfig();
+  ctx.radarCfg = opts.radarCfg || radarConfig();
   ctx.executors = opts.executors || buildExecutors(cfg, ctx.fetch, { revolut: () => ctx.revolut, revolutCfg: ctx.revolutCfg });
   ctx.actions = createActions(ctx);
   ctx.llm = createLLM(ctx);

@@ -11,6 +11,7 @@ import { configWarnings } from './config.js';
 import { toBase } from './policy.js';
 import { importBanks, reconcile, resolveBankTx } from './bank.js';
 import { updateRates } from './fx.js';
+import { collect, decideAdoption, ADOPTION_RU, dailyRadarTask } from './radar.js';
 
 const MAX_BODY = 1_000_000;
 const readBody = (req) => new Promise((res, rej) => {
@@ -50,6 +51,14 @@ export function createHttp(ctx) {
     recent: db.all(`SELECT b.*, a.agent_id FROM bank_tx b LEFT JOIN actions a ON a.id=b.action_id ORDER BY b.ts DESC LIMIT 150`),
     cards_waiting: db.all(`SELECT id, agent_id, amount, currency, payload, result, created_at FROM actions WHERE kind='spend' AND status='manual' AND json_extract(result,'$.card_id') IS NOT NULL ORDER BY id DESC`).map((a) => ({ ...a, payload: JSON.parse(a.payload), result: JSON.parse(a.result) })),
   }));
+  R('GET', /^\/api\/radar$/, () => ({
+    adoptions: db.all(`SELECT a.*, g.name proposer FROM adoptions a LEFT JOIN agents g ON g.id=a.proposed_by ORDER BY CASE a.status WHEN 'proposed' THEN 0 WHEN 'pilot_done' THEN 1 WHEN 'security_review' THEN 2 WHEN 'pilot' THEN 3 ELSE 4 END, a.id DESC LIMIT 100`).map((x) => ({ ...x, status_ru: ADOPTION_RU[x.status] })),
+    items: db.all(`SELECT id,source,title,url,summary,signal,verdict,relevance,assessment,fetched_at FROM radar_items ORDER BY CASE verdict WHEN 'pilot' THEN 0 WHEN 'watch' THEN 1 WHEN NULL THEN 2 ELSE 3 END, COALESCE(relevance,0) DESC, id DESC LIMIT 150`),
+    digests: db.all(`SELECT id,title,created_at FROM documents WHERE kind IN ('digest','radar') ORDER BY id DESC LIMIT 14`),
+    stats: db.get(`SELECT COUNT(*) total, SUM(verdict IS NULL) fresh, SUM(verdict='pilot') pilot, SUM(verdict='watch') watch FROM radar_items`),
+  }));
+  R('POST', /^\/api\/adoptions\/(\d+)\/(approve|reject)$/, (q, m, b) => decideAdoption(ctx, Number(m[1]), m[2] === 'approve', 'director:panel', b.note || ''));
+  R('POST', /^\/api\/radar\/collect$/, async () => { const s = await collect(ctx); const task = dailyRadarTask(ctx); return { ...s, task }; });
   R('POST', /^\/api\/bank\/(\d+)\/resolve$/, (q, m, b) => resolveBankTx(db, Number(m[1]), b, 'director:panel'));
   R('POST', /^\/api\/bank\/sync$/, async () => {
     const fx = await updateRates(ctx).catch(() => null);
@@ -58,7 +67,7 @@ export function createHttp(ctx) {
     db.setSetting('bank_polled_at', Date.now());
     return { added, ...rec, fx: !!fx };
   });
-  R('GET', /^\/api\/overview$/, () => ({ ...dailyMetrics(db, cfg), balances: balances(), bank_unmatched: db.get(`SELECT COUNT(*) n FROM bank_tx WHERE status='unmatched'`).n, paused: db.setting('paused', false), warnings: configWarnings(cfg), limits: cfg.limits, base: cfg.baseCurrency, telegram: !!ctx.telegram?.enabled }));
+  R('GET', /^\/api\/overview$/, () => ({ ...dailyMetrics(db, cfg), balances: balances(), bank_unmatched: db.get(`SELECT COUNT(*) n FROM bank_tx WHERE status='unmatched'`).n, adoptions_waiting: db.get(`SELECT COUNT(*) n FROM adoptions WHERE status IN ('proposed','pilot_done')`).n, paused: db.setting('paused', false), warnings: configWarnings(cfg), limits: cfg.limits, base: cfg.baseCurrency, telegram: !!ctx.telegram?.enabled }));
   R('GET', /^\/api\/actions$/, (q) => db.all(`SELECT a.*, g.name agent_name FROM actions a LEFT JOIN agents g ON g.id=a.agent_id WHERE (?='' OR a.status=?) ORDER BY a.id DESC LIMIT 200`, q.status || '', q.status || '').map((a) => ({ ...a, payload: J(a.payload, {}), result: J(a.result) })));
   R('GET', /^\/api\/projects$/, () => db.all(`SELECT p.*, (SELECT COALESCE(SUM(amount_base),0) FROM ledger l WHERE l.project_id=p.id AND l.direction='in') revenue FROM projects p ORDER BY p.id DESC`));
   R('GET', /^\/api\/tasks$/, (q) => db.all(`SELECT t.id,t.title,t.status,t.dept,t.agent_id,g.name agent_name,t.priority,t.created_by,t.project_id,t.created_at,t.finished_at,substr(t.result,1,600) result,t.error FROM tasks t LEFT JOIN agents g ON g.id=t.agent_id WHERE (?='' OR t.status=?) ORDER BY t.id DESC LIMIT 200`, q.status || '', q.status || ''));

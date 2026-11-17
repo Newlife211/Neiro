@@ -2,6 +2,7 @@
 // публичный адрес для бота не нужен. Команды принимаются ТОЛЬКО из чата директора.
 import { KINDS } from './policy.js';
 import { decideProject, dailyMetrics } from './company.js';
+import { decideAdoption, ADOPTION_RU } from './radar.js';
 import { addTask } from './worker.js';
 
 export function createTelegram(ctx) {
@@ -50,6 +51,7 @@ export function createTelegram(ctx) {
       let msg = 'Готово';
       try {
         if (type === 'a') { const r = await ctx.actions.decide(Number(id), yn === 'y', 'director:telegram'); msg = `#${id}: ${r.status}`; }
+        if (type === 't') { const r = decideAdoption(ctx, Number(id), yn === 'y', 'director:telegram'); msg = `«${r.title}»: ${ADOPTION_RU[r.status]}`; }
         if (type === 'p') { const r = decideProject(ctx, Number(id), yn === 'y', 'director:telegram'); msg = `Проект «${r.name}»: ${r.stage}`; }
       } catch (e) { msg = 'Ошибка: ' + e.message; }
       await api('answerCallbackQuery', { callback_query_id: u.callback_query.id, text: msg.slice(0, 190) });

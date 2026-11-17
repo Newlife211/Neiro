@@ -24,7 +24,7 @@ export function createWorker(ctx) {
       const { agent, result } = await runtime.runTask(t);
       db.run(`UPDATE tasks SET status='done', result=?, finished_at=datetime('now') WHERE id=?`, result.slice(0, 20000), t.id);
       db.feed('✅', `${agent.name} выполнил(а) «${t.title}»`, agent.id, 'good');
-      if (t.created_by === 'director') ctx.notify?.(`✅ ${agent.name} выполнил(а) ваше поручение «${t.title}»:\n\n${result.slice(0, 1500)}`);
+      if (t.created_by === 'director' || t.created_by === 'system:notify') ctx.notify?.(t.created_by === 'director' ? `✅ ${agent.name} выполнил(а) ваше поручение «${t.title}»:\n\n${result.slice(0, 1500)}` : `🛰 ${t.title} — ${agent.name}\n\n${result.slice(0, 1800)}`);
     } catch (e) {
       const msg = String(e.message || e).slice(0, 1000);
       if (e.budget) {

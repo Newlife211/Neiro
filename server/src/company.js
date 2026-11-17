@@ -4,6 +4,7 @@ import { STAGE_RU, companyStatus } from './agent.js';
 import { round2 } from './policy.js';
 import { updateRates } from './fx.js';
 import { importBanks, reconcile } from './bank.js';
+import { collect, dailyRadarTask } from './radar.js';
 
 export function decideProject(ctx, id, approve, by = 'director', note = '') {
   const { db } = ctx;
@@ -75,6 +76,18 @@ export function createScheduler(ctx) {
     }
   }
 
+  // Технологическая разведка: сбор источников (бесплатно) → дайджест руководителя разведки;
+  // по понедельникам — еженедельный технологический радар.
+  async function radarMorning() {
+    if (!db.get(`SELECT 1 FROM agents WHERE id='tr_head' AND enabled=1`)) return;
+    const s = await collect(ctx);
+    db.feed('🛰', `Радар: новых находок — GitHub ${s.github}, Hacker News ${s.hn}, блоги ${s.rss}${s.errors.length ? ` (недоступно источников: ${s.errors.length})` : ''}`, 'tr_head');
+    dailyRadarTask(ctx);
+    const wd = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: cfg.workHours.tz }).format(new Date());
+    if (wd === 'Mon') addTask(db, { title: 'Еженедельный технологический радар', agentId: 'tr_head', dept: 'tech_radar', priority: 4, createdBy: 'system:notify',
+      body: 'Собери технологический радар компании (write_document, kind=radar) в четырёх кольцах: «Внедрять», «Пробовать», «Изучать», «Не трогать». Источники: вердикты за неделю (radar_list verdict=watch/pilot), статусы внедрений (company_status → adoptions). Для внедрённого — подтверди эффект цифрами или предложи откатить. Итоговый ответ — 5 строк для директора.' });
+  }
+
   async function finance() {
     // курсы — раз в сутки; выписки и сверка — каждые 15 минут
     const fxAt = db.setting('fx_rates')?.updated;
@@ -91,6 +104,7 @@ export function createScheduler(ctx) {
   async function tick() {
     await finance();
     const h = hour();
+    if (h >= 7) once('radar', () => { radarMorning().catch((e) => ctx.log?.error('radar', e.message)); });
     if (h >= 8) once('morning', morning);
     if (h >= 20) once('evening', () => {
       const m = dailyMetrics(db, cfg);
@@ -99,5 +113,5 @@ export function createScheduler(ctx) {
     await pollInbound();
   }
   let t;
-  return { finance, start() { t = setInterval(() => tick().catch((e) => ctx.log?.error('sched', e)), 60000); tick().catch(() => {}); }, stop() { clearInterval(t); }, tick, morning, pollInbound };
+  return { finance, radarMorning, start() { t = setInterval(() => tick().catch((e) => ctx.log?.error('sched', e)), 60000); tick().catch(() => {}); }, stop() { clearInterval(t); }, tick, morning, pollInbound };
 }
