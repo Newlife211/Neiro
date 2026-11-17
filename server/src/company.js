@@ -5,6 +5,7 @@ import { round2 } from './policy.js';
 import { updateRates } from './fx.js';
 import { importBanks, reconcile } from './bank.js';
 import { collect, dailyRadarTask } from './radar.js';
+import { meetingTick } from './director.js';
 
 export function decideProject(ctx, id, approve, by = 'director', note = '') {
   const { db } = ctx;
@@ -102,6 +103,8 @@ export function createScheduler(ctx) {
   }
 
   async function tick() {
+    meetingTick(ctx);
+    ctx.telegram?.forwardFeed?.();
     await finance();
     const h = hour();
     if (h >= 7) once('radar', () => { radarMorning().catch((e) => ctx.log?.error('radar', e.message)); });

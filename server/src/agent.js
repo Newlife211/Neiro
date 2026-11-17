@@ -3,6 +3,7 @@ import { J } from './db.js';
 import { KINDS, llmBudgetOk, spentSoFar, round2 } from './policy.js';
 import { radarList, radarAssess, proposeAdoption, adoptionUpdate, ADOPTION_RU } from './radar.js';
 import { readUrl } from './webread.js';
+import { askDirector } from './director.js';
 
 export const STAGES = ['idea', 'analysis', 'decision', 'build', 'test', 'launch', 'revenue', 'closed'];
 export const STAGE_RU = { idea: 'Идея', analysis: 'Анализ', decision: 'Решение директора', build: 'Разработка', test: 'Тест', launch: 'Запуск', revenue: 'Доход', closed: 'Закрыт' };
@@ -20,6 +21,8 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { kind: { type: 'string', enum: Object.keys(KINDS) }, payload: { type: 'object', description: 'send_email: {to:[..], subject, text}; reply_email: {message_id, text}; post_telegram: {text}; create_payment_link: {title, project_id, recurring?: "month"|"year", provider?: "stripe"|"yookassa", customer_email?}; spend: {vendor, purpose, category: "ads"|"services"|"tools"|"other", recurring?: bool, url?}; refund: {provider, payment_id}; deploy: {project, ref}; change_price/sign_contract/custom: {description}' }, amount: { type: 'number' }, currency: { type: 'string' } }, required: ['kind', 'payload'] } },
   { name: 'remember', description: 'Запомнить важный факт для будущих задач.', input_schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
   { name: 'company_status', description: 'Цифры компании: деньги, лимиты, проекты, очередь задач.', input_schema: { type: 'object', properties: {} } },
+  { name: 'ask_director', description: 'Задать вопрос директору, когда без его решения дальше нельзя (стратегия, деньги сверх полномочий, спорные ситуации). Не чаще 3 раз в день. Ответ придёт отдельной задачей — не жди его.',
+    input_schema: { type: 'object', properties: { question: { type: 'string', description: 'Коротко и конкретно' }, context: { type: 'string', description: 'Что известно, что предлагаешь' }, options: { type: 'array', items: { type: 'string' }, description: 'До 4 вариантов ответа — директор выберет кнопкой' }, urgency: { type: 'string', enum: ['normal', 'high'] } }, required: ['question'] } },
 ];
 
 // Инструменты технологической разведки и внедрений
@@ -90,7 +93,8 @@ export function createAgentRuntime(ctx) {
 4. Пиши письма и посты честно: не выдавай себя за человека, если прямо спросят; соблюдай закон о рекламе и персональных данных, без спама — только тем, кто дал согласие или ожидает письма.
 5. Делегируй через create_task, указывая ключ отдела. Не создавай задачи-дубли.
 6. Лимиты трат: до ${cfg.limits.perAction} ${cfg.baseCurrency} за раз, ${cfg.limits.daily} в день, ${cfg.limits.monthly} в месяц — выше нужен директор.
-7. Закончи кратким отчётом: что сделано, что ждёт директора, следующий шаг.
+7. Вопрос директору — через ask_director, только если без него нельзя; не дёргай директора по мелочам.
+8. Закончи кратким отчётом: что сделано, что ждёт директора, следующий шаг.
 
 Отделы: ${depts}
 Сотрудники:\n${team}
@@ -155,6 +159,7 @@ ${mem ? '\nТвоя память:\n' + mem : ''}
         return { ok: true };
       case 'company_status':
         return { ...companyStatus(db, cfg), adoptions: db.all(`SELECT id,title,status,owner_dept FROM adoptions WHERE status NOT IN ('rejected') ORDER BY id DESC LIMIT 15`).map((x) => ({ ...x, status_ru: ADOPTION_RU[x.status] })) };
+      case 'ask_director': return askDirector(ctx, a, task, input);
       case 'radar_list': return radarList(db, input);
       case 'radar_assess': return radarAssess(db, a, input);
       case 'propose_adoption': return proposeAdoption(ctx, a, input);

@@ -12,6 +12,8 @@ import { toBase } from './policy.js';
 import { importBanks, reconcile, resolveBankTx } from './bank.js';
 import { updateRates } from './fx.js';
 import { collect, decideAdoption, ADOPTION_RU, dailyRadarTask } from './radar.js';
+import { verifyInitData } from './tgauth.js';
+import { answerQuestion, giveOrder, createMeeting, meetingsView, heads } from './director.js';
 
 const MAX_BODY = 1_000_000;
 const readBody = (req) => new Promise((res, rej) => {
@@ -34,6 +36,13 @@ export function createHttp(ctx) {
     const f = fails.get(ip);
     if (f && f.n >= 10 && Date.now() - f.t < 15 * 60000) return 'locked';
     const h = req.headers.authorization || '';
+    // Вход из Telegram Mini App: подпись Telegram + пользователь = директор
+    if (h.startsWith('tma ')) {
+      const v = verifyInitData(h.slice(4), cfg.telegram.token);
+      const ok = !!(v && cfg.telegram.directorChatId && String(v.user?.id) === String(cfg.telegram.directorChatId));
+      if (!ok) fails.set(ip, { n: (f && Date.now() - f.t < 15 * 60000 ? f.n : 0) + 1, t: Date.now() }); else fails.delete(ip);
+      return ok;
+    }
     const tok = h.startsWith('Bearer ') ? h.slice(7) : '';
     const ok = cfg.directorToken.length >= 24 && tok.length === cfg.directorToken.length && crypto.timingSafeEqual(Buffer.from(tok), Buffer.from(cfg.directorToken));
     if (!ok) fails.set(ip, { n: (f && Date.now() - f.t < 15 * 60000 ? f.n : 0) + 1, t: Date.now() }); else fails.delete(ip);
@@ -51,6 +60,13 @@ export function createHttp(ctx) {
     recent: db.all(`SELECT b.*, a.agent_id FROM bank_tx b LEFT JOIN actions a ON a.id=b.action_id ORDER BY b.ts DESC LIMIT 150`),
     cards_waiting: db.all(`SELECT id, agent_id, amount, currency, payload, result, created_at FROM actions WHERE kind='spend' AND status='manual' AND json_extract(result,'$.card_id') IS NOT NULL ORDER BY id DESC`).map((a) => ({ ...a, payload: JSON.parse(a.payload), result: JSON.parse(a.result) })),
   }));
+  // ---- кабинет директора: вопросы, поручения, совещания ----
+  R('GET', /^\/api\/questions$/, () => db.all(`SELECT q.*, a.name agent_name, a.role agent_role FROM questions q LEFT JOIN agents a ON a.id=q.agent_id ORDER BY q.status='open' DESC, q.id DESC LIMIT 100`).map((q) => ({ ...q, options: J(q.options, []) })));
+  R('POST', /^\/api\/questions\/(\d+)\/answer$/, (q, m, b) => answerQuestion(ctx, Number(m[1]), b.answer, 'director:cabinet'));
+  R('POST', /^\/api\/orders$/, (q, m, b) => giveOrder(ctx, { text: b.text, to: b.agent_id || (b.dept ? null : 'coo'), dept: b.dept || null, priority: Number(b.priority) || 2, via: 'cabinet' }));
+  R('GET', /^\/api\/orders$/, () => db.all(`SELECT t.id,t.title,t.status,t.created_at,t.finished_at,substr(t.result,1,800) result,g.name agent_name FROM tasks t LEFT JOIN agents g ON g.id=t.agent_id WHERE t.created_by='director' ORDER BY t.id DESC LIMIT 50`));
+  R('GET', /^\/api\/meetings$/, () => ({ meetings: meetingsView(db), heads: heads(db) }));
+  R('POST', /^\/api\/meetings$/, (q, m, b) => createMeeting(ctx, { agenda: b.agenda, participants: b.participants, via: 'cabinet' }));
   R('GET', /^\/api\/radar$/, () => ({
     adoptions: db.all(`SELECT a.*, g.name proposer FROM adoptions a LEFT JOIN agents g ON g.id=a.proposed_by ORDER BY CASE a.status WHEN 'proposed' THEN 0 WHEN 'pilot_done' THEN 1 WHEN 'security_review' THEN 2 WHEN 'pilot' THEN 3 ELSE 4 END, a.id DESC LIMIT 100`).map((x) => ({ ...x, status_ru: ADOPTION_RU[x.status] })),
     items: db.all(`SELECT id,source,title,url,summary,signal,verdict,relevance,assessment,fetched_at FROM radar_items ORDER BY CASE verdict WHEN 'pilot' THEN 0 WHEN 'watch' THEN 1 WHEN NULL THEN 2 ELSE 3 END, COALESCE(relevance,0) DESC, id DESC LIMIT 150`),
@@ -67,7 +83,7 @@ export function createHttp(ctx) {
     db.setSetting('bank_polled_at', Date.now());
     return { added, ...rec, fx: !!fx };
   });
-  R('GET', /^\/api\/overview$/, () => ({ ...dailyMetrics(db, cfg), balances: balances(), bank_unmatched: db.get(`SELECT COUNT(*) n FROM bank_tx WHERE status='unmatched'`).n, adoptions_waiting: db.get(`SELECT COUNT(*) n FROM adoptions WHERE status IN ('proposed','pilot_done')`).n, paused: db.setting('paused', false), warnings: configWarnings(cfg), limits: cfg.limits, base: cfg.baseCurrency, telegram: !!ctx.telegram?.enabled }));
+  R('GET', /^\/api\/overview$/, () => ({ ...dailyMetrics(db, cfg), balances: balances(), questions_open: db.get(`SELECT COUNT(*) n FROM questions WHERE status='open'`).n, meetings_active: db.get(`SELECT COUNT(*) n FROM meetings WHERE status!='done'`).n, bank_unmatched: db.get(`SELECT COUNT(*) n FROM bank_tx WHERE status='unmatched'`).n, adoptions_waiting: db.get(`SELECT COUNT(*) n FROM adoptions WHERE status IN ('proposed','pilot_done')`).n, paused: db.setting('paused', false), warnings: configWarnings(cfg), limits: cfg.limits, base: cfg.baseCurrency, telegram: !!ctx.telegram?.enabled }));
   R('GET', /^\/api\/actions$/, (q) => db.all(`SELECT a.*, g.name agent_name FROM actions a LEFT JOIN agents g ON g.id=a.agent_id WHERE (?='' OR a.status=?) ORDER BY a.id DESC LIMIT 200`, q.status || '', q.status || '').map((a) => ({ ...a, payload: J(a.payload, {}), result: J(a.result) })));
   R('GET', /^\/api\/projects$/, () => db.all(`SELECT p.*, (SELECT COALESCE(SUM(amount_base),0) FROM ledger l WHERE l.project_id=p.id AND l.direction='in') revenue FROM projects p ORDER BY p.id DESC`));
   R('GET', /^\/api\/tasks$/, (q) => db.all(`SELECT t.id,t.title,t.status,t.dept,t.agent_id,g.name agent_name,t.priority,t.created_by,t.project_id,t.created_at,t.finished_at,substr(t.result,1,600) result,t.error FROM tasks t LEFT JOIN agents g ON g.id=t.agent_id WHERE (?='' OR t.status=?) ORDER BY t.id DESC LIMIT 200`, q.status || '', q.status || ''));
@@ -122,6 +138,7 @@ export function createHttp(ctx) {
     try {
       if (req.method === 'GET' && p === '/health') return send(res, 200, { ok: true });
       if (req.method === 'GET' && (p === '/' || p === '/panel')) return send(res, 200, panel(), 'text/html; charset=utf-8');
+      if (req.method === 'GET' && (p === '/tg' || p === '/tg/')) return send(res, 200, fs.readFileSync(path.join(cfg.root, 'public', 'miniapp.html'), 'utf8'), 'text/html; charset=utf-8');
       if (req.method === 'GET' && p === '/paid') return send(res, 200, '<!doctype html><meta charset="utf-8"><title>Спасибо</title><body style="font-family:sans-serif;padding:40px">Спасибо! Оплата обрабатывается — подтверждение придёт на почту.</body>', 'text/html; charset=utf-8');
 
       if (req.method === 'POST' && p === '/webhooks/stripe') {

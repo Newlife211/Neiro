@@ -54,6 +54,13 @@ CREATE TABLE IF NOT EXISTS adoptions (
   id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, summary TEXT, benefit TEXT, cost TEXT, risk TEXT, plan TEXT, owner_dept TEXT,
   items TEXT, status TEXT NOT NULL, proposed_by TEXT, security_note TEXT, pilot_task_id INTEGER, result TEXT, director_note TEXT,
   created_at TEXT DEFAULT (datetime('now')), decided_at TEXT);
+CREATE TABLE IF NOT EXISTS questions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, agent_id TEXT, task_id INTEGER, question TEXT NOT NULL, context TEXT, options TEXT, urgency TEXT DEFAULT 'normal',
+  status TEXT NOT NULL DEFAULT 'open', answer TEXT, tg_message_id INTEGER, created_at TEXT DEFAULT (datetime('now')), answered_at TEXT);
+CREATE TABLE IF NOT EXISTS meetings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, agenda TEXT NOT NULL, participants TEXT, status TEXT NOT NULL, summary_task_id INTEGER, protocol TEXT, protocol_doc_id INTEGER,
+  created_at TEXT DEFAULT (datetime('now')), finished_at TEXT);
+CREATE TABLE IF NOT EXISTS meeting_tasks (meeting_id INTEGER, task_id INTEGER, agent_id TEXT, PRIMARY KEY(meeting_id, task_id));
 CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), actor TEXT, event TEXT, data TEXT);
 `;
 

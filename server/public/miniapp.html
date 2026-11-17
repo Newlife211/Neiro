@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Кабинет директора — Нейросфера</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#0c1016;--p:#151b24;--p2:#1b2330;--l:#263041;--t:#ecf0f6;--m:#8d98aa;--g:#3ddc97;--r:#ff5a5a;--y:#ffd166;--b:#5aa9ff;--gold:#d4a72c}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--t);font:14px/1.45 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100%}
+.top{display:flex;align-items:center;gap:8px;padding:10px 14px 6px}
+.top .t1{font-weight:800;letter-spacing:.14em;font-size:11px;color:var(--gold)}
+.top .t2{font-size:12px;color:var(--m)}
+.top .sp{flex:1}
+.pill{font-size:11px;padding:3px 9px;border-radius:10px;background:var(--p2);color:var(--m)}
+.pill.stop{background:#3b1414;color:var(--r)}
+.scene{flex:1;min-height:0;display:flex;align-items:flex-end;justify-content:center;background:#141b26}
+svg#desk{width:100%;height:100%;display:block}
+.obj{cursor:pointer;transition:filter .15s,transform .15s;transform-box:fill-box;transform-origin:center}
+.obj:active{filter:brightness(1.35)}
+.obj.alert .badge{animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+.lbl{font:600 9px -apple-system,system-ui,sans-serif;fill:rgba(236,240,246,.62);text-anchor:middle;pointer-events:none;letter-spacing:.02em}
+.steam{animation:steam 3s ease-in-out infinite;opacity:.0}
+@keyframes steam{0%{opacity:0;transform:translateY(4px)}40%{opacity:.35}100%{opacity:0;transform:translateY(-10px)}}
+.bar{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:8px 10px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(#0c101600,#0c1016 30%)}
+.bar button{position:relative;background:var(--p);border:1px solid var(--l);color:var(--t);border-radius:12px;padding:8px 2px 7px;font:600 11px -apple-system,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;gap:3px}
+.bar button .i{font-size:18px;line-height:1}
+.bar button.danger{border-color:#5c2222;background:#2a1212;color:#ffb3b3}
+.bar .bd{position:absolute;top:-5px;right:6px;background:var(--r);color:#fff;border-radius:9px;font-size:10px;padding:0 5px;min-width:16px}
+/* нижняя шторка */
+.sheet{position:fixed;inset:0;z-index:5;pointer-events:none}
+.sheet .shade{position:absolute;inset:0;background:#0008;opacity:0;transition:opacity .2s}
+.sheet .panel{position:absolute;left:0;right:0;bottom:0;height:88%;background:var(--bg);border-top:1px solid var(--l);border-radius:18px 18px 0 0;transform:translateY(102%);transition:transform .25s ease;display:flex;flex-direction:column}
+.sheet.open{pointer-events:auto}.sheet.open .shade{opacity:1}.sheet.open .panel{transform:none}
+.ph{display:flex;align-items:center;gap:10px;padding:12px 16px 8px}
+.ph h3{margin:0;font-size:17px;flex:1}
+.ph .x{background:var(--p2);border:0;color:var(--m);width:30px;height:30px;border-radius:15px;font-size:16px}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--l);margin:8px auto 0}
+.pc{flex:1;overflow:auto;padding:4px 14px 30px;-webkit-overflow-scrolling:touch}
+.card{background:var(--p);border:1px solid var(--l);border-radius:14px;padding:12px;margin:0 0 10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sp2{flex:1}
+.k{color:var(--m);font-size:12px}.v{font-size:20px;font-weight:700}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.note{color:var(--m);font-size:12px}
+.btn{background:var(--p2);border:1px solid var(--l);color:var(--t);padding:9px 12px;border-radius:10px;font:600 13px -apple-system,system-ui,sans-serif}
+.btn.ok{background:#14321f;border-color:#2b6b50;color:#9df0c5}.btn.no{background:#321414;border-color:#6b2b2b;color:#ffb3b3}.btn.gold{background:#3a3220;border-color:#7a6220;color:var(--y)}
+.btn.full{width:100%;margin-top:8px}
+input,textarea,select{width:100%;background:#0f141c;border:1px solid var(--l);color:var(--t);border-radius:10px;padding:10px;font:14px -apple-system,system-ui,sans-serif}
+textarea{resize:vertical}
+.st{font-size:11px;padding:2px 8px;border-radius:9px;background:var(--p2);white-space:nowrap}
+.st.w{color:var(--y)}.st.g{color:var(--g)}.st.r{color:var(--r)}.st.b{color:var(--b)}
+.feed div{padding:6px 0;border-bottom:1px dashed var(--l);font-size:13px}
+.feed .bad{color:#ff9b9b}.feed .good{color:#9df0c5}.feed .warn{color:#ffe08a}
+pre{white-space:pre-wrap;font:13px/1.5 -apple-system,system-ui,sans-serif;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--l);background:var(--p2);color:var(--t);border-radius:16px;padding:6px 10px;font-size:12px}
+.chip.on{border-color:#7a6220;background:#3a3220;color:var(--y)}
+#login{position:fixed;inset:0;z-index:9;background:var(--bg);display:none;align-items:center;justify-content:center;padding:24px}
+#login .card{max-width:380px;width:100%}
+.toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:var(--p2);border:1px solid var(--l);padding:8px 14px;border-radius:12px;z-index:10;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top"><div><div class="t1">НЕЙРОСФЕРА</div><div class="t2">Кабинет директора</div></div><span class="sp"></span><span id="clock" class="pill">--:--</span><span id="stopPill" class="pill">работаем</span></div>
+  <div class="scene">
+  <svg id="desk" viewBox="0 -150 400 650" preserveAspectRatio="xMidYMax meet" aria-label="Рабочий стол директора">
+    <defs>
+      <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#18202c"/><stop offset="1" stop-color="#10151d"/></linearGradient>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop id="sky1" offset="0" stop-color="#0b1a33"/><stop id="sky2" offset="1" stop-color="#28385a"/></linearGradient>
+      <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a3c25"/><stop offset=".55" stop-color="#6e4a2e"/><stop offset="1" stop-color="#7b5434"/></linearGradient>
+      <linearGradient id="woodEdge" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f2918"/><stop offset="1" stop-color="#24170e"/></linearGradient>
+      <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f2236"/><stop offset="1" stop-color="#0a1522"/></linearGradient>
+      <radialGradient id="lampLight" cx=".3" cy=".1" r=".9"><stop offset="0" stop-color="#ffd58a" stop-opacity=".28"/><stop offset="1" stop-color="#ffd58a" stop-opacity="0"/></radialGradient>
+      <radialGradient id="dome" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#ff8080"/><stop offset=".6" stop-color="#d81f1f"/><stop offset="1" stop-color="#7a0b0b"/></radialGradient>
+      <radialGradient id="globeG" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#5fc1ff"/><stop offset="1" stop-color="#1b4f86"/></radialGradient>
+      <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4"/></filter>
+    </defs>
+
+    <!-- стена и окно -->
+    <rect x="-200" y="-400" width="800" height="700" fill="url(#wall)"/>
+    <!-- потолок со светильниками -->
+    <rect x="-200" y="-400" width="800" height="262" fill="#0e131b"/>
+    <rect x="-200" y="-140" width="800" height="3" fill="#232c3a"/>
+    <g fill="#fff3d6"><ellipse cx="110" cy="-146" rx="26" ry="3" opacity=".8"/><ellipse cx="290" cy="-146" rx="26" ry="3" opacity=".8"/></g>
+    <g fill="#ffe7b0" opacity=".06"><polygon points="84,-143 136,-143 170,-40 50,-40"/><polygon points="264,-143 316,-143 350,-40 230,-40"/></g>
+    <!-- часы -->
+    <g><circle cx="200" cy="-82" r="26" fill="#e9e4da" stroke="#2a313d" stroke-width="4"/><g stroke="#2a313d" stroke-width="1.5"><path d="M200 -104v4M200 -64v4M178 -82h4M218 -82h4"/></g>
+      <line id="hHand" x1="200" y1="-82" x2="200" y2="-96" stroke="#1d2330" stroke-width="3" stroke-linecap="round"/><line id="mHand" x1="200" y1="-82" x2="200" y2="-102" stroke="#1d2330" stroke-width="2" stroke-linecap="round"/><circle cx="200" cy="-82" r="2" fill="#c0392b"/></g>
+    <!-- табличка компании -->
+    <g><rect x="40" y="-100" width="104" height="40" rx="3" fill="#1d2430" stroke="#c9a227" stroke-width="1.5"/><text x="92" y="-82" font-size="9" font-weight="800" fill="#d4a72c" text-anchor="middle" letter-spacing="2">НЕЙРОСФЕРА</text><text x="92" y="-69" font-size="6.5" fill="#8d98aa" text-anchor="middle">кабинет директора</text></g>
+    <!-- полка с наградами -->
+    <g><rect x="258" y="-66" width="110" height="5" fill="#5a3c25"/><rect x="270" y="-86" width="14" height="20" fill="#c9a227"/><circle cx="277" cy="-90" r="6" fill="#d4a72c"/><rect x="292" y="-92" width="8" height="26" fill="#2f6fb3"/><rect x="302" y="-88" width="8" height="22" fill="#3d8f63"/><rect x="312" y="-94" width="8" height="28" fill="#8a3a3a"/><rect x="330" y="-80" width="28" height="14" rx="2" fill="#2a313d"/><text x="344" y="-70" font-size="6" fill="#9fd8b4" text-anchor="middle">MRR</text></g>
+    <rect x="66" y="18" width="268" height="126" rx="4" fill="#0a0e14"/>
+    <rect x="72" y="24" width="256" height="114" fill="url(#sky)"/>
+    <g id="stars"></g>
+    <g id="city"></g>
+    <rect x="198" y="24" width="4" height="114" fill="#222b38"/>
+    <rect x="72" y="80" width="256" height="3" fill="#222b38"/>
+    <rect x="66" y="142" width="268" height="6" fill="#1e2632"/>
+
+    <!-- доска команды на стене -->
+    <g class="obj" data-go="team">
+      <rect x="10" y="40" width="50" height="66" rx="3" fill="#6b5236" stroke="#3d2e1d" stroke-width="3"/>
+      <rect x="16" y="47" width="17" height="15" fill="#e8e2d0"/><rect x="37" y="49" width="17" height="15" fill="#d9e6ef"/>
+      <rect x="18" y="68" width="17" height="15" fill="#efe0d9"/><rect x="37" y="72" width="17" height="15" fill="#e2efd9"/>
+      <rect x="22" y="88" width="26" height="12" fill="#f3efe0"/>
+      <circle cx="24" cy="47" r="1.6" fill="#d33"/><circle cx="45" cy="49" r="1.6" fill="#3a6"/><circle cx="26" cy="68" r="1.6" fill="#36c"/>
+      <text class="lbl" x="35" y="120">Команда</text>
+    </g>
+
+    <!-- растение -->
+    <g opacity=".95">
+      <path d="M352 228 q-14 -40 -2 -70 q6 30 4 70z" fill="#2f7d4f"/><path d="M356 228 q10 -46 30 -58 q-12 34 -24 60z" fill="#3a9a5f"/>
+      <path d="M350 230 q-26 -26 -34 -50 q22 16 36 48z" fill="#2a6b45"/>
+      <path d="M338 226 h40 l-6 40 h-28z" fill="#3b4250"/>
+    </g>
+
+    <!-- столешница -->
+    <polygon points="34,282 366,282 400,474 0,474" fill="url(#wood)"/>
+    <g stroke="#4c321f" stroke-opacity=".35" stroke-width="1" fill="none">
+      <path d="M60 300 Q200 296 340 300"/><path d="M40 330 Q200 324 360 332"/><path d="M24 370 Q200 362 376 372"/><path d="M12 420 Q200 410 388 422"/>
+    </g>
+    <rect x="0" y="474" width="400" height="26" fill="url(#woodEdge)"/>
+    <polygon points="34,282 366,282 400,474 0,474" fill="url(#lampLight)"/>
+
+    <!-- лампа -->
+    <g>
+      <ellipse cx="58" cy="292" rx="16" ry="4.5" fill="#1d232d"/>
+      <path d="M58 290 L74 230 L104 206" stroke="#2a313d" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M96 196 l26 10 l-8 14 l-24 -8z" fill="#2f3744"/>
+      <ellipse cx="108" cy="214" rx="9" ry="3" fill="#ffe2a6" filter="url(#glow)"/>
+    </g>
+
+    <!-- папки с документами -->
+    <g class="obj" data-go="docs" transform="translate(0,-12)">
+      <polygon points="10,336 66,330 70,346 12,352" fill="#2f6fb3"/>
+      <polygon points="8,348 64,342 68,360 10,366" fill="#c9a227"/>
+      <polygon points="6,362 62,356 66,376 8,382" fill="#3d8f63"/>
+      <polygon points="8,348 64,342 64,345 8,351" fill="#fff" opacity=".25"/>
+      <text class="lbl" x="38" y="394">Документы</text>
+    </g>
+
+    <!-- календарь -->
+    <g class="obj" data-go="meetings">
+      <polygon points="78,330 128,326 132,362 80,366" fill="#f1ede4"/>
+      <polygon points="78,330 128,326 128,336 78,340" fill="#c0392b"/>
+      <circle cx="90" cy="330" r="2" fill="#333"/><circle cx="116" cy="328" r="2" fill="#333"/>
+      <text id="calMon" x="103" y="337" font-size="6.5" font-weight="700" fill="#fff" text-anchor="middle">НОЯ</text>
+      <text id="calDay" x="105" y="358" font-size="17" font-weight="800" fill="#2a2a2a" text-anchor="middle">17</text>
+      <g class="badge" id="b-meetings" display="none"><circle cx="132" cy="326" r="8" fill="#ffb020"/><text x="132" y="329.5" font-size="9" font-weight="700" fill="#111" text-anchor="middle">•</text></g>
+      <text class="lbl" x="105" y="378">Совещания</text>
+    </g>
+
+    <!-- монитор -->
+    <g class="obj" data-go="overview">
+      <ellipse cx="200" cy="292" rx="36" ry="6" fill="#1a1f27"/>
+      <rect x="192" y="252" width="16" height="40" fill="#232a35"/>
+      <rect x="94" y="146" width="212" height="116" rx="7" fill="#0a0d12" stroke="#2a3240" stroke-width="2"/>
+      <rect x="101" y="153" width="198" height="100" rx="3" fill="url(#screen)"/>
+      <rect x="101" y="153" width="198" height="100" rx="3" fill="#5aa9ff" opacity=".05"/>
+      <text x="110" y="168" font-size="8" font-weight="800" fill="#d4a72c" letter-spacing="1.2">НЕЙРОСФЕРА · СЕГОДНЯ</text>
+      <text x="110" y="186" font-size="7" fill="#8d98aa">Выручка за месяц</text><text id="mRev" x="110" y="200" font-size="13" font-weight="800" fill="#3ddc97">—</text>
+      <text x="206" y="186" font-size="7" fill="#8d98aa">Расходы</text><text id="mExp" x="206" y="200" font-size="13" font-weight="800" fill="#ecf0f6">—</text>
+      <text x="110" y="218" font-size="7" fill="#8d98aa">Задач за сутки</text><text id="mTasks" x="110" y="232" font-size="12" font-weight="700" fill="#ecf0f6">—</text>
+      <text x="206" y="218" font-size="7" fill="#8d98aa">Ждут вас</text><text id="mPend" x="206" y="232" font-size="12" font-weight="700" fill="#ffd166">—</text>
+      <text id="mLine" x="110" y="247" font-size="6.5" fill="#5aa9ff">загрузка…</text>
+      <text class="lbl" x="200" y="276">Обзор компании</text>
+    </g>
+
+    <!-- кружка -->
+    <g>
+      <path class="steam" d="M262 286 q-4 -8 0 -14 q4 -6 0 -12" stroke="#fff" stroke-width="2" fill="none"/>
+      <path class="steam" style="animation-delay:1.2s" d="M270 288 q-4 -8 0 -14 q4 -6 0 -12" stroke="#fff" stroke-width="2" fill="none"/>
+      <rect x="254" y="288" width="24" height="24" rx="3" fill="#e9e4da"/><ellipse cx="266" cy="289" rx="12" ry="3" fill="#3a2414"/>
+      <path d="M278 293 q9 0 9 7 q0 7 -9 7" stroke="#e9e4da" stroke-width="3" fill="none"/>
+    </g>
+
+    <!-- глобус: технологии -->
+    <g class="obj" data-go="tech">
+      <ellipse cx="330" cy="300" rx="16" ry="4" fill="#1a1f27"/>
+      <rect x="327" y="284" width="6" height="16" fill="#8a6a3a"/>
+      <circle cx="330" cy="264" r="22" fill="url(#globeG)"/>
+      <path d="M312 258 q10 -6 18 2 q6 8 16 2" stroke="#7fe0a4" stroke-width="3" fill="none" opacity=".75"/>
+      <path d="M318 274 q8 4 14 -2" stroke="#7fe0a4" stroke-width="3" fill="none" opacity=".7"/>
+      <ellipse cx="330" cy="264" rx="9" ry="22" fill="none" stroke="#fff" stroke-opacity=".25"/>
+      <path d="M304 270 a28 28 0 0 0 50 -16" stroke="#c9a227" stroke-width="2.5" fill="none"/>
+      <g class="badge" id="b-tech" display="none"><circle cx="350" cy="244" r="9" fill="#ff5a5a"/><text id="t-tech" x="350" y="247.5" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">0</text></g>
+      <text class="lbl" x="330" y="316">Технологии</text>
+    </g>
+
+    <!-- лоток «Входящие»: решения -->
+    <g class="obj" data-go="decisions">
+      <polygon points="34,404 140,398 150,446 26,454" fill="#1e2530"/>
+      <polygon points="44,398 132,393 138,428 38,434" fill="#f4f1ea"/>
+      <polygon points="48,394 134,389 138,420 44,426" fill="#fbfaf6"/>
+      <g stroke="#9aa4b2" stroke-width="1.2"><path d="M58 400 L120 396"/><path d="M58 407 L126 403"/><path d="M58 414 L110 411"/></g>
+      <polygon points="26,436 150,428 152,446 26,456" fill="#2a3240"/>
+      <text x="88" y="446" font-size="7.5" font-weight="800" fill="#c9d2de" text-anchor="middle" letter-spacing="1">ВХОДЯЩИЕ</text>
+      <g class="badge" id="b-decisions" display="none"><circle cx="142" cy="394" r="10" fill="#ff5a5a"/><text id="t-decisions" x="142" y="398" font-size="10" font-weight="800" fill="#fff" text-anchor="middle">0</text></g>
+      <text class="lbl" x="88" y="468">Решения</text>
+    </g>
+
+    <!-- блокнот: поручение -->
+    <g class="obj" data-go="order">
+      <g transform="rotate(-4 205 420)">
+        <rect x="162" y="380" width="92" height="74" rx="4" fill="#2b2f36"/>
+        <rect x="167" y="384" width="82" height="66" rx="2" fill="#f7f3e8"/>
+        <g stroke="#b9c3d0" stroke-width="1"><path d="M174 398 H242"/><path d="M174 408 H242"/><path d="M174 418 H242"/><path d="M174 428 H242"/><path d="M174 438 H242"/></g>
+        <text x="176" y="396" font-size="8" font-weight="700" fill="#5a4630" font-style="italic">Поручение:</text>
+        <path d="M176 406 q8 -3 16 0 t16 0 t16 0" stroke="#2f4f8f" stroke-width="1.2" fill="none"/>
+      </g>
+      <g transform="rotate(32 262 410)"><rect x="236" y="407" width="54" height="6" rx="3" fill="#c9a227"/><polygon points="290,407 298,410 290,413" fill="#333"/></g>
+      <text class="lbl" x="208" y="468">Поручить</text>
+    </g>
+
+    <!-- кнопка СТОП -->
+    <g class="obj" data-go="stop">
+      <ellipse cx="300" cy="352" rx="24" ry="9" fill="#1a1d22"/>
+      <rect x="278" y="340" width="44" height="12" rx="3" fill="#2a2e35"/>
+      <ellipse cx="300" cy="340" rx="17" ry="7" fill="url(#dome)"/>
+      <path d="M284 340 a16 13 0 0 1 32 0" fill="url(#dome)"/>
+      <path d="M281 341 a19 16 0 0 1 38 0" fill="#bfe6ff" fill-opacity=".12" stroke="#cfe9ff" stroke-opacity=".35"/>
+      <text id="stopTxt" x="300" y="349" font-size="6.5" font-weight="800" fill="#fff" text-anchor="middle">СТОП</text>
+      <text class="lbl" x="300" y="372">Аварийная кнопка</text>
+    </g>
+
+    <!-- смартфон: вопросы сотрудников -->
+    <g class="obj" data-go="questions">
+      <g transform="rotate(14 320 425)">
+        <rect x="296" y="384" width="50" height="88" rx="8" fill="#0d0f13" stroke="#3a404b" stroke-width="2"/>
+        <rect id="phoneScreen" x="300" y="392" width="42" height="72" rx="4" fill="#141a22"/>
+        <text id="phoneTxt" x="321" y="426" font-size="7" font-weight="700" fill="#8d98aa" text-anchor="middle">нет</text>
+        <text id="phoneTxt2" x="321" y="436" font-size="6" fill="#8d98aa" text-anchor="middle">вопросов</text>
+      </g>
+      <g class="badge" id="b-questions" display="none"><circle cx="300" cy="386" r="10" fill="#ff5a5a"/><text id="t-questions" x="300" y="390" font-size="10" font-weight="800" fill="#fff" text-anchor="middle">0</text></g>
+      <text class="lbl" x="322" y="486">Вопросы</text>
+    </g>
+
+    <!-- калькулятор: деньги -->
+    <g class="obj" data-go="money">
+      <polygon points="352,330 392,334 396,388 354,384" fill="#2a2f38"/>
+      <polygon points="357,336 388,339 389,352 358,349" fill="#9fd8b4"/>
+      <text id="calcTxt" x="373" y="348" font-size="6.5" font-weight="700" fill="#14321f" text-anchor="middle">€</text>
+      <g fill="#4a5262"><rect x="358" y="355" width="7" height="6"/><rect x="368" y="356" width="7" height="6"/><rect x="378" y="357" width="7" height="6"/><rect x="358" y="364" width="7" height="6"/><rect x="368" y="365" width="7" height="6"/><rect x="378" y="366" width="7" height="6" fill="#c9a227"/><rect x="359" y="373" width="7" height="6"/><rect x="369" y="374" width="7" height="6"/><rect x="379" y="375" width="7" height="6"/></g>
+      <g class="badge" id="b-money" display="none"><circle cx="392" cy="330" r="8" fill="#ffb020"/><text id="t-money" x="392" y="333.5" font-size="8.5" font-weight="800" fill="#111" text-anchor="middle">0</text></g>
+      <text class="lbl" x="372" y="400">Деньги</text>
+    </g>
+  </svg>
+  </div>
+  <div class="bar">
+    <button data-go="decisions"><span class="i">📥</span>Решения<span class="bd" id="bb-decisions" hidden></span></button>
+    <button data-go="order"><span class="i">✍️</span>Поручить</button>
+    <button data-go="meetings"><span class="i">📣</span>Совещание</button>
+    <button data-go="questions"><span class="i">💬</span>Вопросы<span class="bd" id="bb-questions" hidden></span></button>
+    <button data-go="stop" class="danger" id="stopBtn"><span class="i">🛑</span><span id="stopLbl">СТОП</span></button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet"><div class="shade" data-close></div><div class="panel"><div class="grab"></div><div class="ph"><h3 id="sh-title"></h3><button class="x" data-close>✕</button></div><div class="pc" id="sh-body"></div></div></div>
+<div id="login"><div class="card"><h3 style="margin-top:0">Кабинет директора</h3><p class="note">Откройте кабинет из Telegram-бота компании. Для входа из браузера введите токен директора.</p><input id="tok" type="password" placeholder="DIRECTOR_TOKEN"><button class="btn gold full" id="loginBtn">Войти</button></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
+let AUTH = tg ? 'tma ' + tg.initData : (localStorage.getItem('ns_token') ? 'Bearer ' + localStorage.getItem('ns_token') : '');
+let ov = null, current = null;
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const money = (v) => (Math.round((v || 0) * 100) / 100).toLocaleString('ru-RU') + ' ' + (ov ? ov.base : '');
+const haptic = (t = 'light') => { try { tg && tg.HapticFeedback.impactOccurred(t); } catch {} };
+const toast = (t) => { const e = $('#toast'); e.textContent = t; e.classList.add('on'); setTimeout(() => e.classList.remove('on'), 2200); };
+const confirmBox = (text) => new Promise((res) => tg && tg.showConfirm ? tg.showConfirm(text, res) : res(confirm(text)));
+const STAGE = { idea: 'Идея', analysis: 'Анализ', decision: 'Ждёт вашего решения', build: 'Разработка', test: 'Тест', launch: 'Запуск', revenue: 'Доход', closed: 'Закрыт' };
+const KIND = { send_email: 'Отправить письмо', reply_email: 'Ответить на письмо', post_telegram: 'Пост в Telegram', create_payment_link: 'Ссылка на оплату', spend: 'Оплатить расход', refund: 'Возврат денег', deploy: 'Выкатить в продакшн', change_price: 'Изменить цену', sign_contract: 'Принять договор', real_trade: 'Сделка на бирже', custom: 'Иное действие' };
+const TST = { queued: ['в очереди', 'w'], running: ['в работе', 'b'], done: ['готово', 'g'], failed: ['не выполнено', 'r'], blocked: ['пауза', 'w'], cancelled: ['отменено', ''] };
+
+async function api(p, o = {}) {
+  const r = await fetch(p, { ...o, headers: { Authorization: AUTH, 'Content-Type': 'application/json' } });
+  if (r.status === 401) { showLogin(); throw new Error('auth'); }
+  const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j;
+}
+const post = (p, b = {}) => api(p, { method: 'POST', body: JSON.stringify(b) });
+
+function showLogin() { if (tg) { $('#app').innerHTML = '<div class="card" style="margin:20px">Доступ к кабинету только у директора компании.</div>'; return; } $('#login').style.display = 'flex'; }
+$('#loginBtn').onclick = () => { const t = $('#tok').value.trim(); localStorage.setItem('ns_token', t); AUTH = 'Bearer ' + t; $('#login').style.display = 'none'; refresh(); };
+
+// ---------- сцена ----------
+function paintScene() {
+  const now = new Date(), h = now.getHours() + now.getMinutes() / 60;
+  const [a, b] = h >= 7 && h < 17 ? ['#4f8fd6', '#b7d8f5'] : h >= 17 && h < 20.5 ? ['#3a3a7a', '#f19a5a'] : h >= 5 && h < 7 ? ['#2a3a6a', '#e7a37a'] : ['#070d1c', '#1d2b4a'];
+  $('#sky1').setAttribute('stop-color', a); $('#sky2').setAttribute('stop-color', b);
+  const night = h < 6.5 || h >= 19;
+  let s = ''; if (night) for (let i = 0; i < 22; i++) s += `<circle cx="${76 + ((i * 53) % 248)}" cy="${28 + ((i * 29) % 46)}" r="${i % 3 ? 0.7 : 1.1}" fill="#fff" opacity="${0.4 + (i % 4) * 0.15}"/>`;
+  $('#stars').innerHTML = s;
+  let c = ''; let x = 72; let seed = 7;
+  const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  while (x < 328) {
+    const w = 14 + rnd() * 22, hh = 24 + rnd() * 58, y = 138 - hh, col = night ? '#0d1422' : '#3c4c63';
+    c += `<rect x="${x}" y="${y}" width="${Math.min(w, 328 - x)}" height="${hh}" fill="${col}"/>`;
+    for (let wy = y + 5; wy < 134; wy += 7) for (let wx = x + 3; wx < x + w - 4 && wx < 324; wx += 6) if (rnd() > (night ? 0.55 : 0.8)) c += `<rect x="${wx}" y="${wy}" width="2.6" height="3" fill="${night ? '#ffd27a' : '#cfe3f7'}" opacity="${night ? 0.85 : 0.5}"/>`;
+    x += w + 2;
+  }
+  $('#city').innerHTML = c;
+  const mon = ['ЯНВ', 'ФЕВ', 'МАР', 'АПР', 'МАЙ', 'ИЮН', 'ИЮЛ', 'АВГ', 'СЕН', 'ОКТ', 'НОЯ', 'ДЕК'][now.getMonth()];
+  $('#calMon').textContent = mon; $('#calDay').textContent = now.getDate();
+  const mA = now.getMinutes() * 6, hA = (now.getHours() % 12) * 30 + now.getMinutes() / 2;
+  $('#hHand').setAttribute('transform', `rotate(${hA} 200 -82)`); $('#mHand').setAttribute('transform', `rotate(${mA} 200 -82)`);
+  $('#clock').textContent = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+function badge(id, n) {
+  const g = document.getElementById('b-' + id); if (g) { g.setAttribute('display', n ? 'inline' : 'none'); const t = document.getElementById('t-' + id); if (t) t.textContent = n > 99 ? '99+' : n; g.parentNode.classList.toggle('alert', !!n); }
+  const bb = document.getElementById('bb-' + id); if (bb) { bb.hidden = !n; bb.textContent = n; }
+}
+async function refresh() {
+  try { ov = await api('/api/overview'); } catch (e) { return; }
+  const dec = ov.pending_approvals + ov.projects.filter((p) => p.stage === 'decision').length + (ov.adoptions_waiting || 0);
+  $('#mRev').textContent = money(ov.revenue_month); $('#mExp').textContent = money(ov.expenses_month);
+  $('#mTasks').textContent = `${ov.tasks_done_24h} готово`; $('#mPend').textContent = `${dec} решений`;
+  $('#mLine').textContent = ov.stopped ? '🛑 СТОП: внешние действия остановлены' : `траты сегодня ${ov.spend_limits.spent_today} из ${ov.spend_limits.day} ${ov.base}`;
+  badge('decisions', dec); badge('questions', ov.questions_open || 0); badge('tech', ov.adoptions_waiting || 0); badge('money', ov.bank_unmatched || 0);
+  document.getElementById('b-meetings').setAttribute('display', ov.meetings_active ? 'inline' : 'none');
+  const q = ov.questions_open || 0;
+  $('#phoneScreen').setAttribute('fill', q ? '#1d3b5c' : '#141a22');
+  $('#phoneTxt').textContent = q ? q + ' ' + (q === 1 ? 'вопрос' : q < 5 ? 'вопроса' : 'вопросов') : 'нет'; $('#phoneTxt2').textContent = q ? 'от команды' : 'вопросов';
+  $('#phoneTxt').setAttribute('fill', q ? '#fff' : '#8d98aa');
+  $('#stopPill').textContent = ov.stopped ? 'СТОП' : ov.paused ? 'пауза' : 'работаем'; $('#stopPill').className = 'pill' + (ov.stopped ? ' stop' : '');
+  $('#stopLbl').textContent = ov.stopped ? 'Снять СТОП' : 'СТОП'; $('#stopTxt').textContent = ov.stopped ? 'ВКЛ' : 'СТОП';
+  $('#calcTxt').textContent = (ov.revenue_24h >= 0 ? '+' : '') + Math.round(ov.revenue_24h) + ' ' + ov.base;
+  if (current) openSheet(current, true);
+}
+
+// ---------- шторка ----------
+const TITLES = { overview: '🖥 Обзор компании', decisions: '📥 Решения', questions: '💬 Вопросы команды', order: '✍️ Поручение', meetings: '📣 Совещания', docs: '📁 Документы', tech: '🛰 Технологии', money: '🧮 Деньги', team: '👥 Команда' };
+async function openSheet(key, silent) {
+  if (key === 'stop') return toggleStop();
+  if (!silent) haptic();
+  current = key; $('#sh-title').textContent = TITLES[key]; $('#sheet').classList.add('open');
+  if (tg) { tg.BackButton.show(); }
+  if (!silent) $('#sh-body').innerHTML = '<p class="note">Загружаю…</p>';
+  if (silent && document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  try { $('#sh-body').innerHTML = await V[key](); } catch (e) { if (e.message !== 'auth') $('#sh-body').innerHTML = `<div class="card">Ошибка: ${esc(e.message)}</div>`; }
+}
+function closeSheet() { current = null; $('#sheet').classList.remove('open'); if (tg) tg.BackButton.hide(); }
+document.querySelectorAll('[data-close]').forEach((e) => (e.onclick = closeSheet));
+document.querySelectorAll('[data-go]').forEach((e) => (e.onclick = () => openSheet(e.dataset.go)));
+if (tg) tg.BackButton.onClick(closeSheet);
+
+async function toggleStop() {
+  haptic('heavy');
+  const v = !ov.stopped;
+  if (!(await confirmBox(v ? 'Включить СТОП? Агенты ничего не будут отправлять и тратить, пока вы его не снимете.' : 'Снять СТОП и вернуть агентам внешние действия?'))) return;
+  await post('/api/control', { stopped: v }); toast(v ? '🛑 СТОП включён' : '▶ Работа возобновлена'); refresh();
+}
+
+const V = {
+  async overview() {
+    const f = await api('/api/feed'); const o = ov;
+    return `<div class="grid2"><div class="card"><div class="k">Выручка, месяц</div><div class="v" style="color:var(--g)">${money(o.revenue_month)}</div><div class="note">за сутки ${money(o.revenue_24h)}</div></div>
+    <div class="card"><div class="k">Расходы, месяц</div><div class="v">${money(o.expenses_month)}</div><div class="note">Claude API ${money(o.claude_api_month)}</div></div>
+    <div class="card"><div class="k">Траты агентов сегодня</div><div class="v">${money(o.spend_limits.spent_today)}</div><div class="note">лимит ${o.spend_limits.day}</div></div>
+    <div class="card"><div class="k">Задач за сутки</div><div class="v">${o.tasks_done_24h}</div><div class="note">сбоев ${o.tasks_failed_24h}</div></div></div>
+    ${o.balances && o.balances.length ? `<div class="card"><div class="k">Банк</div>${o.balances.map((b) => `<div class="row"><span class="note">${esc(b.bank)} ${esc(b.name || '')}</span><span class="sp2"></span><b>${(+b.balance).toLocaleString('ru-RU')} ${esc(b.currency)}</b></div>`).join('')}</div>` : ''}
+    <div class="card"><div class="k" style="margin-bottom:6px">Проекты</div>${o.projects.length ? o.projects.map((p) => `<div class="row"><b>${esc(p.name)}</b><span class="sp2"></span><span class="st ${p.stage === 'decision' ? 'w' : 'b'}">${STAGE[p.stage]}</span></div>`).join('') : '<span class="note">Пока нет</span>'}</div>
+    ${o.warnings && o.warnings.length ? `<div class="card" style="border-color:#6b5a20"><div class="k">Настройка не завершена</div>${o.warnings.map((w) => `<div class="note">• ${esc(w)}</div>`).join('')}</div>` : ''}
+    <div class="card feed"><div class="k">Что происходит</div>${f.slice(0, 40).map((x) => `<div class="${x.level}">${esc(x.icon)} ${esc(x.text)} <span class="note">${esc(x.ts.slice(11, 16))}</span></div>`).join('')}</div>`;
+  },
+  async decisions() {
+    const [acts, man, proj, rad] = await Promise.all([api('/api/actions?status=pending'), api('/api/actions?status=manual'), api('/api/projects'), api('/api/radar')]);
+    const pd = proj.filter((p) => p.stage === 'decision'), ad = rad.adoptions.filter((a) => ['proposed', 'pilot_done'].includes(a.status));
+    if (!acts.length && !pd.length && !ad.length && !man.length) return '<div class="card">✨ Всё решено. Новое появится здесь и в чате.</div>';
+    const p = (a) => a.payload || {};
+    return `${pd.map((x) => `<div class="card"><div class="row"><span class="st w">проект</span><b>${esc(x.name)}</b></div><p style="margin:8px 0">${esc(x.summary || '')}</p><div class="note">${x.roi ? 'ROI ' + x.roi + '% · ' : ''}${x.price ? 'цена ' + x.price + ' ' + esc(x.currency || '') : ''}</div><div class="row" style="margin-top:8px"><button class="btn ok" onclick="pdec(${x.id},1)">✅ Утвердить</button><button class="btn no" onclick="pdec(${x.id},0)">✖ Отклонить</button></div></div>`).join('')}
+    ${acts.map((a) => `<div class="card"><div class="row"><span class="st w">#${a.id}</span><b>${esc(KIND[a.kind] || a.kind)}</b><span class="sp2"></span>${a.amount ? `<b>${a.amount} ${esc(a.currency)}</b>` : ''}</div><div class="note" style="margin:4px 0">${esc(a.agent_name || '')} · ${esc(a.policy_reason || '')}</div>
+      ${p(a).vendor || p(a).purpose ? `<div>${esc([p(a).vendor, p(a).purpose].filter(Boolean).join(' — '))}</div>` : ''}${p(a).to ? `<div class="note">Кому: ${esc([].concat(p(a).to).join(', '))}</div>` : ''}${p(a).subject ? `<div><b>${esc(p(a).subject)}</b></div>` : ''}${p(a).text ? `<pre class="note">${esc(String(p(a).text).slice(0, 600))}</pre>` : ''}${p(a).description ? `<div>${esc(p(a).description)}</div>` : ''}
+      <div class="row" style="margin-top:8px"><button class="btn ok" onclick="adec(${a.id},'approve')">✅ Одобрить</button><button class="btn no" onclick="adec(${a.id},'reject')">✖ Отклонить</button></div></div>`).join('')}
+    ${ad.map((a) => `<div class="card"><div class="row"><span class="st b">технология</span><b>${esc(a.title)}</b></div><div class="note" style="margin-top:4px">${esc(a.status_ru)}</div><div style="margin-top:4px">Польза: ${esc(a.benefit)}</div>${a.result ? `<div class="note">Итоги пилота: ${esc(a.result)}</div>` : `<div class="note">План: ${esc(a.plan)}</div>`}<div class="row" style="margin-top:8px"><button class="btn ok" onclick="tdec(${a.id},1)">✅ ${a.status === 'proposed' ? 'Запустить пилот' : 'Внедрить'}</button><button class="btn no" onclick="tdec(${a.id},0)">✖ Отклонить</button></div></div>`).join('')}
+    ${man.length ? `<div class="k" style="margin:12px 0 6px">Выполнить вручную</div>${man.map((a) => `<div class="card"><div class="row"><b>#${a.id} ${esc(KIND[a.kind] || a.kind)}</b><span class="sp2"></span>${a.amount ? `<b>${a.amount} ${esc(a.currency)}</b>` : ''}</div><div class="note">${esc((a.result && a.result.note) || '')}</div><button class="btn full" onclick="mdone(${a.id})">Я выполнил</button></div>`).join('')}` : ''}`;
+  },
+  async questions() {
+    const qs = await api('/api/questions'); const open = qs.filter((q) => q.status === 'open'), done = qs.filter((q) => q.status !== 'open').slice(0, 15);
+    return `${open.length ? open.map((q) => `<div class="card"><div class="row"><b>${esc(q.agent_name)}</b><span class="note">${esc(q.agent_role || '')}</span>${q.urgency === 'high' ? '<span class="st r">срочно</span>' : ''}</div><p style="margin:8px 0">${esc(q.question)}</p>${q.context ? `<div class="note">${esc(q.context)}</div>` : ''}
+      ${q.options.length ? `<div class="chips" style="margin-top:8px">${q.options.map((o, i) => `<button class="chip" onclick="qans(${q.id}, ${i})">${esc(o)}</button>`).join('')}</div>` : ''}
+      <textarea id="qa${q.id}" rows="2" placeholder="Ваш ответ" style="margin-top:8px"></textarea><button class="btn gold full" onclick="qtext(${q.id})">Ответить</button></div>`).join('') : '<div class="card">Открытых вопросов нет. Когда сотруднику понадобится ваше решение, вопрос появится здесь и в чате.</div>'}
+    ${done.length ? `<div class="k" style="margin:12px 0 6px">Отвеченные</div>${done.map((q) => `<div class="card"><div class="note">${esc(q.agent_name)}: ${esc(q.question)}</div><div>↳ ${esc(q.answer || '')}</div></div>`).join('')}` : ''}`;
+  },
+  async order() {
+    const [ag, orders] = await Promise.all([api('/api/agents'), api('/api/orders')]);
+    const heads = ag.filter((a) => a.enabled);
+    return `<div class="card"><div class="k" style="margin-bottom:6px">Кому</div><select id="oTo"><option value="coo">COO — распределит сам(а)</option>${heads.filter((a) => a.id !== 'coo').map((a) => `<option value="${a.id}">${esc(a.name)} — ${esc(a.role)}</option>`).join('')}</select>
+      <textarea id="oText" rows="4" placeholder="Что нужно сделать и к какому сроку" style="margin-top:8px"></textarea>
+      <div class="row" style="margin-top:8px"><label class="note"><input type="checkbox" id="oUrg" style="width:auto"> срочно</label></div>
+      <button class="btn gold full" onclick="sendOrder()">Поручить</button></div>
+      <div class="k" style="margin:12px 0 6px">Мои поручения</div>${orders.length ? orders.map((o) => `<div class="card"><div class="row"><b>${esc(o.title)}</b><span class="sp2"></span><span class="st ${(TST[o.status] || ['', ''])[1]}">${(TST[o.status] || [o.status])[0]}</span></div><div class="note">${esc(o.agent_name || '')}</div>${o.result ? `<pre class="note" style="margin-top:6px">${esc(o.result)}</pre>` : ''}</div>`).join('') : '<p class="note">Пока нет.</p>'}`;
+  },
+  async meetings() {
+    const { meetings, heads } = await api('/api/meetings');
+    const MS = { collecting: ['собираем доклады', 'w'], summarizing: ['COO пишет протокол', 'b'], done: ['протокол готов', 'g'] };
+    return `<div class="card"><div class="k" style="margin-bottom:6px">Созвать совещание</div><textarea id="mAgenda" rows="3" placeholder="Повестка: например, как выйти на первую выручку за 2 недели"></textarea>
+      <div class="k" style="margin:8px 0 6px">Участники</div><div class="chips" id="mPart">${heads.map((h) => `<button class="chip on" data-id="${h.id}" onclick="this.classList.toggle('on')">${esc(h.name)}<span class="note"> · ${esc(h.dept_name || h.dept)}</span></button>`).join('')}</div>
+      <button class="btn gold full" onclick="newMeeting()">📣 Созвать</button><p class="note" style="margin-bottom:0">Каждый участник готовит доклад, затем COO сводит протокол с решениями и поручениями. Итог придёт в чат.</p></div>
+      ${meetings.map((m) => `<div class="card"><div class="row"><b>#${m.id}</b><span class="st ${(MS[m.status] || ['', ''])[1]}">${(MS[m.status] || [m.status])[0]}</span><span class="sp2"></span><span class="note">${esc(m.created_at.slice(0, 16))}</span></div><div style="margin:6px 0">${esc(m.agenda)}</div>
+      <div class="chips">${m.reports.map((r) => `<span class="chip">${r.status === 'done' ? '✅' : r.status === 'failed' ? '⚠️' : '⏳'} ${esc(r.name)}</span>`).join('')}</div>
+      ${m.protocol ? `<pre style="margin-top:8px">${esc(m.protocol)}</pre>` : ''}${m.protocol_doc_id ? `<button class="btn full" onclick="openDoc(${m.protocol_doc_id})">Полный протокол</button>` : ''}</div>`).join('')}`;
+  },
+  async docs() {
+    const d = await api('/api/documents');
+    return d.length ? d.map((x) => `<div class="card" onclick="openDoc(${x.id})"><div class="row"><b>${esc(x.title)}</b><span class="sp2"></span><span class="st">${esc(x.kind || '')}</span></div><div class="note">${esc(x.agent_name || '')} · ${esc(x.created_at.slice(0, 16))}</div></div>`).join('') : '<div class="card">Документов пока нет.</div>';
+  },
+  async tech() {
+    const r = await api('/api/radar');
+    const act = r.adoptions.filter((a) => !['adopted', 'rejected', 'blocked'].includes(a.status));
+    return `<div class="card"><div class="row"><span class="note">находок ${r.stats.total || 0} · новых ${r.stats.fresh || 0} · на пилот ${r.stats.pilot || 0}</span><span class="sp2"></span><button class="btn" onclick="radarNow()">Собрать</button></div>${r.digests.length ? `<div class="chips" style="margin-top:8px">${r.digests.slice(0, 6).map((d) => `<button class="chip" onclick="openDoc(${d.id})">${esc(d.title)} · ${esc(d.created_at.slice(5, 10))}</button>`).join('')}</div>` : ''}</div>
+      ${act.map((a) => `<div class="card"><div class="row"><b>${esc(a.title)}</b><span class="sp2"></span><span class="st ${['proposed', 'pilot_done'].includes(a.status) ? 'w' : 'b'}">${esc(a.status_ru)}</span></div><div class="note" style="margin-top:4px">Польза: ${esc(a.benefit)}</div>${['proposed', 'pilot_done'].includes(a.status) ? `<div class="row" style="margin-top:8px"><button class="btn ok" onclick="tdec(${a.id},1)">✅ ${a.status === 'proposed' ? 'Пилот' : 'Внедрить'}</button><button class="btn no" onclick="tdec(${a.id},0)">✖</button></div>` : ''}</div>`).join('')}
+      <div class="k" style="margin:12px 0 6px">Свежие находки</div>${r.items.slice(0, 25).map((i) => `<div class="card"><a href="${/^https?:\/\//.test(i.url) ? esc(i.url) : '#'}" onclick="return openLink(this.href)" style="color:var(--b);text-decoration:none"><b>${esc(i.title)}</b></a><div class="note">${esc(i.assessment || i.summary || '')}</div></div>`).join('')}`;
+  },
+  async money() {
+    const [b, l] = await Promise.all([api('/api/bank'), api('/api/ledger')]);
+    return `<div class="grid2"><div class="card"><div class="k">Выручка, месяц</div><div class="v" style="color:var(--g)">${money(ov.revenue_month)}</div></div><div class="card"><div class="k">Расходы, месяц</div><div class="v">${money(ov.expenses_month)}</div></div></div>
+      ${b.balances.length ? `<div class="card">${b.balances.map((x) => `<div class="row"><span class="note">${esc(x.bank)} ${esc(x.name || '')}</span><span class="sp2"></span><b>${(+x.balance).toLocaleString('ru-RU')} ${esc(x.currency)}</b></div>`).join('')}</div>` : ''}
+      ${b.unmatched.length ? `<div class="k" style="margin:10px 0 6px">Сверка: нужно ваше решение</div>${b.unmatched.slice(0, 15).map((t) => `<div class="card"><div class="row"><b style="color:${t.amount > 0 ? 'var(--g)' : 'var(--t)'}">${t.amount > 0 ? '+' : ''}${t.amount} ${esc(t.currency)}</b><span class="note">${esc(t.counterparty || t.description || '')}</span></div><div class="row" style="margin-top:8px"><button class="btn ok" onclick="rtx(${t.id},'${t.amount < 0 ? 'expense' : 'income'}')">${t.amount < 0 ? 'Расход' : 'Доход'}</button><button class="btn" onclick="rtx(${t.id},'internal')">Свой перевод</button><button class="btn" onclick="rtx(${t.id},'ignore')">Игнор</button></div></div>`).join('')}` : ''}
+      <div class="k" style="margin:10px 0 6px">Последние операции</div><div class="card">${l.slice(0, 25).map((x) => `<div class="row" style="padding:4px 0;border-bottom:1px dashed var(--l)"><span class="note">${esc(x.ts.slice(5, 10))}</span><span>${esc(x.note || x.category)}</span><span class="sp2"></span><b style="color:${x.direction === 'in' ? 'var(--g)' : 'var(--t)'}">${x.direction === 'in' ? '+' : '−'}${x.amount} ${esc(x.currency)}</b></div>`).join('') || '<span class="note">Пока пусто</span>'}</div>`;
+  },
+  async team() {
+    const a = await api('/api/agents');
+    return `<p class="note">Включённые сотрудники работают и расходуют Claude API.</p>${a.map((x) => `<div class="card"><div class="row"><b>${esc(x.name)}</b>${x.head ? ' ⭐' : ''}<span class="sp2"></span><label class="note"><input type="checkbox" ${x.enabled ? 'checked' : ''} style="width:auto" onchange="agSet('${x.id}',this.checked)"> в штате</label></div><div class="note">${esc(x.role)} · задач: ${x.done} · ${money(x.cost_month)}</div></div>`).join('')}`;
+  },
+};
+
+async function openDoc(id) { haptic(); const d = await api('/api/documents/' + id); current = null; $('#sh-title').textContent = '📄 ' + d.title; $('#sh-body').innerHTML = `<div class="card"><pre>${esc(d.content)}</pre></div>`; }
+function openLink(u) { if (u.endsWith('#')) return false; if (tg && tg.openLink) { tg.openLink(u); return false; } return true; }
+async function adec(id, a) { if (a === 'approve' && !(await confirmBox('Одобрить действие #' + id + '?'))) return; haptic('medium'); await post(`/api/actions/${id}/${a}`); toast(a === 'approve' ? '✅ Одобрено' : '✖ Отклонено'); refresh(); }
+async function pdec(id, ok) { haptic('medium'); await post(`/api/projects/${id}/${ok ? 'approve' : 'reject'}`); toast(ok ? '✅ Проект утверждён' : '✖ Отклонён'); refresh(); }
+async function tdec(id, ok) { haptic('medium'); await post(`/api/adoptions/${id}/${ok ? 'approve' : 'reject'}`); toast(ok ? '✅ Принято' : '✖ Отклонено'); refresh(); }
+async function mdone(id) { await post(`/api/actions/${id}/done`); toast('Отмечено'); refresh(); }
+async function qans(id, i) { const qs = await api('/api/questions'); const q = qs.find((x) => x.id === id); await post(`/api/questions/${id}/answer`, { answer: q.options[i] }); haptic('medium'); toast('💬 Ответ отправлен'); refresh(); }
+async function qtext(id) { const t = document.getElementById('qa' + id).value.trim(); if (!t) return; await post(`/api/questions/${id}/answer`, { answer: t }); haptic('medium'); toast('💬 Ответ отправлен'); refresh(); }
+async function sendOrder() { const t = $('#oText').value.trim(); if (!t) return toast('Напишите поручение'); const r = await post('/api/orders', { text: t, agent_id: $('#oTo').value, priority: $('#oUrg').checked ? 1 : 2 }); haptic('medium'); toast('📌 Поручено: ' + r.to); $('#oText').value = ''; openSheet('order', true); }
+async function newMeeting() { const a = $('#mAgenda').value.trim(); if (!a) return toast('Напишите повестку'); const p = [...document.querySelectorAll('#mPart .chip.on')].map((e) => e.dataset.id); if (!p.length) return toast('Выберите участников'); const r = await post('/api/meetings', { agenda: a, participants: p }); haptic('medium'); toast(`📣 Совещание #${r.id} созвано`); $('#mAgenda').value = ''; refresh(); }
+async function radarNow() { const r = await post('/api/radar/collect'); toast(`Новых находок: ${r.github + r.hn + r.rss}`); refresh(); }
+async function rtx(id, as) { await post(`/api/bank/${id}/resolve`, { as }); toast('Готово'); refresh(); }
+async function agSet(id, on) { await api('/api/agents/' + id, { method: 'PATCH', body: JSON.stringify({ enabled: on }) }); toast(on ? 'В штате' : 'Выведен из штата'); }
+
+if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor('#0c1016'); tg.setBackgroundColor('#0c1016'); } catch {} }
+paintScene(); setInterval(paintScene, 60000);
+if (!AUTH) showLogin(); else refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>
