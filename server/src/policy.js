@@ -6,6 +6,7 @@ export const KINDS = {
   send_email:          { cat: 'comm',   title: 'Отправить письмо' },
   reply_email:         { cat: 'comm',   title: 'Ответить на письмо' },
   post_telegram:       { cat: 'comm',   title: 'Пост в Telegram-канал' },
+  post_social:         { cat: 'comm',   title: 'Пост в соцсети проекта' },
   // приём денег (деньги к нам — без риска потерь)
   create_payment_link: { cat: 'money_in', title: 'Создать ссылку на оплату' },
   // траты
@@ -40,7 +41,7 @@ export function spentSoFar(db) {
   };
 }
 export function outboundToday(db) {
-  return db.get(`SELECT COUNT(*) n FROM actions WHERE kind IN ('send_email','reply_email','post_telegram') AND status IN ('auto','approved','executed') AND created_at >= datetime('now','start of day')`).n;
+  return db.get(`SELECT COUNT(*) n FROM actions WHERE kind IN ('send_email','reply_email','post_telegram','post_social') AND status IN ('auto','approved','executed') AND created_at >= datetime('now','start of day')`).n;
 }
 export function llmSpent(db) {
   return {

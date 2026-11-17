@@ -124,6 +124,16 @@ pre{white-space:pre-wrap;font:13px/1.5 -apple-system,system-ui,sans-serif;margin
       <text class="lbl" x="35" y="120">Команда</text>
     </g>
 
+    <!-- график на стене: маркетинг -->
+    <g class="obj" data-go="marketing" transform="translate(-76,-96)">
+      <rect x="340" y="40" width="50" height="66" rx="3" fill="#1d2430" stroke="#3d2e1d" stroke-width="3"/>
+      <path d="M347 56 l13 -6 v18 l-13 -6 z" fill="#ffd166"/><rect x="343" y="55" width="5" height="8" rx="1" fill="#ffd166"/>
+      <path d="M363 52 q5 7 0 14" stroke="#ffd166" stroke-width="1.6" fill="none"/><path d="M367 49 q8 10 0 20" stroke="#ffd166" stroke-width="1.6" fill="none" opacity=".6"/>
+      <polyline points="346,98 355,90 363,93 373,80 384,74" stroke="#3ddc97" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+      <g class="badge" id="b-marketing" display="none"><circle cx="388" cy="42" r="8" fill="#ff5a5a"/><text id="t-marketing" x="388" y="45.5" font-size="8.5" font-weight="700" fill="#fff" text-anchor="middle">0</text></g>
+      <text class="lbl" x="365" y="113">Маркетинг</text>
+    </g>
+
     <!-- дверь в офис -->
     <g class="obj" onclick="enterOffice()">
       <rect x="346" y="20" width="50" height="232" fill="#2a1f16"/>
@@ -349,7 +359,7 @@ async function refresh() {
   $('#mRev').textContent = money(ov.revenue_month); $('#mExp').textContent = money(ov.expenses_month);
   $('#mTasks').textContent = `${ov.tasks_done_24h} готово`; $('#mPend').textContent = `${dec} решений`;
   $('#mLine').textContent = ov.stopped ? '🛑 СТОП: внешние действия остановлены' : `траты сегодня ${ov.spend_limits.spent_today} из ${ov.spend_limits.day} ${ov.base}`;
-  badge('decisions', dec); badge('questions', ov.questions_open || 0); badge('tech', ov.adoptions_waiting || 0); badge('money', ov.bank_unmatched || 0);
+  badge('decisions', dec); badge('questions', ov.questions_open || 0); badge('tech', ov.adoptions_waiting || 0); badge('money', ov.bank_unmatched || 0); badge('marketing', ov.marketing_waiting || 0);
   document.getElementById('b-meetings').setAttribute('display', ov.meetings_active ? 'inline' : 'none');
   const q = ov.questions_open || 0;
   $('#phoneScreen').setAttribute('fill', q ? '#1d3b5c' : '#141a22');
@@ -362,7 +372,7 @@ async function refresh() {
 }
 
 // ---------- шторка ----------
-const TITLES = { overview: '🖥 Обзор компании', decisions: '📥 Решения', questions: '💬 Вопросы команды', order: '✍️ Поручение', meetings: '📣 Совещания', docs: '📁 Документы', tech: '🛰 Технологии', money: '🧮 Деньги', team: '👥 Команда' };
+const TITLES = { overview: '🖥 Обзор компании', decisions: '📥 Решения', questions: '💬 Вопросы команды', order: '✍️ Поручение', meetings: '📣 Совещания', docs: '📁 Документы', tech: '🛰 Технологии', marketing: '📣 Маркетинг', money: '🧮 Деньги', team: '👥 Команда' };
 async function openSheet(key, silent) {
   if (key === 'stop') return toggleStop();
   if (!silent) haptic();
@@ -445,6 +455,21 @@ const V = {
       ${act.map((a) => `<div class="card"><div class="row"><b>${esc(a.title)}</b><span class="sp2"></span><span class="st ${['proposed', 'pilot_done'].includes(a.status) ? 'w' : 'b'}">${esc(a.status_ru)}</span></div><div class="note" style="margin-top:4px">Польза: ${esc(a.benefit)}</div>${['proposed', 'pilot_done'].includes(a.status) ? `<div class="row" style="margin-top:8px"><button class="btn ok" onclick="tdec(${a.id},1)">✅ ${a.status === 'proposed' ? 'Пилот' : 'Внедрить'}</button><button class="btn no" onclick="tdec(${a.id},0)">✖</button></div>` : ''}</div>`).join('')}
       <div class="k" style="margin:12px 0 6px">Свежие находки</div>${r.items.slice(0, 25).map((i) => `<div class="card"><a href="${/^https?:\/\//.test(i.url) ? esc(i.url) : '#'}" onclick="return openLink(this.href)" style="color:var(--b);text-decoration:none"><b>${esc(i.title)}</b></a><div class="note">${esc(i.assessment || i.summary || '')}</div></div>`).join('')}`;
   },
+  async marketing() {
+    const r = await api('/api/marketing');
+    const ST = { proposed: 'w', approved: 'b', running: 'b', reporting: 'w', done: 'g', rejected: 'r' }, VR = { go: 'масштабировать', iterate: 'ещё тест', kill: 'закрыть' };
+    const f = (v) => (v == null ? '—' : v);
+    return `<div class="card"><div class="row"><span class="note">реклама за месяц ${money(r.ads_month)} · Meta ${r.platforms.meta ? '✓' : 'вручную'} · Google ${r.platforms.google ? '✓' : 'вручную'}</span></div></div>
+      ${r.tests.map((t) => `<div class="card"><div class="row"><b>${esc(t.title)}</b><span class="sp2"></span><span class="st ${ST[t.status] || ''}">${esc(t.status_ru)}</span></div>
+        ${t.project ? `<div class="note">${esc(t.project)}</div>` : ''}
+        <div class="note" style="margin-top:4px">потрачено ${t.spent} из ${t.budget_base} ${r.base}${t.status === 'running' ? ` · день ${t.day}/${t.days}` : ''}</div>
+        <div class="note">визиты ${t.total.visits} · заявки ${t.total.leads} · покупки ${t.total.purchases} · заявка ${f(t.total.cpl)} · клиент ${f(t.total.cac)}</div>
+        ${t.checks.length && !['proposed', 'rejected'].includes(t.status) ? `<div class="note">${t.checks.map((c) => (c.ok ? '✅ ' : '❌ ') + esc(c.name)).join(' · ')}</div>` : ''}
+        ${t.status === 'proposed' ? `<div class="note" style="margin-top:6px">${esc(t.hypothesis)}<br>Кому: ${esc(t.segment)}<br>Оффер: ${esc(t.offer)}<br>Каналы: ${t.channels.map((c) => esc(c.channel) + ' ' + c.budget).join(', ')}</div><div class="row" style="margin-top:8px"><button class="btn ok" onclick="mkDec(${t.id},'approve')">✅ Бюджет ${t.budget} ${esc(t.currency)}</button><button class="btn no" onclick="mkDec(${t.id},'reject')">✖</button></div>` : ''}
+        ${['approved', 'running'].includes(t.status) ? `<div class="row" style="margin-top:8px"><button class="btn no" onclick="mkDec(${t.id},'stop')">⏹ Остановить тест</button></div>` : ''}
+        ${t.status === 'done' && !t.decision ? `<div class="note" style="margin-top:6px">Команда советует: ${VR[t.verdict] || '—'}</div><div class="row" style="margin-top:6px"><button class="btn ok" onclick="mkV(${t.id},'go')">🚀</button><button class="btn" onclick="mkV(${t.id},'iterate')">🔁 Ещё тест</button><button class="btn no" onclick="mkV(${t.id},'kill')">✖ Закрыть</button>${t.report_doc_id ? `<button class="btn" onclick="openDoc(${t.report_doc_id})">Отчёт</button>` : ''}</div>` : ''}
+      </div>`).join('') || '<p class="note">Тестов спроса пока нет.</p>'}`;
+  },
   async money() {
     const [b, l] = await Promise.all([api('/api/bank'), api('/api/ledger')]);
     return `<div class="grid2"><div class="card"><div class="k">Выручка, месяц</div><div class="v" style="color:var(--g)">${money(ov.revenue_month)}</div></div><div class="card"><div class="k">Расходы, месяц</div><div class="v">${money(ov.expenses_month)}</div></div></div>
@@ -458,6 +483,8 @@ const V = {
   },
 };
 
+async function mkDec(id, a) { if (a !== 'reject' && !(await confirmBox(a === 'approve' ? 'Одобрить бюджет теста?' : 'Остановить тест и его рекламу?'))) return; haptic('medium'); await post(`/api/marketing/tests/${id}/${a}`); toast('Готово'); openSheet('marketing', true); refresh(); }
+async function mkV(id, v) { haptic('medium'); await post(`/api/marketing/tests/${id}/verdict`, { verdict: v }); toast('Решение принято'); openSheet('marketing', true); refresh(); }
 async function openDoc(id) { haptic(); const d = await api('/api/documents/' + id); current = null; $('#sh-title').textContent = '📄 ' + d.title; $('#sh-body').innerHTML = `<div class="card"><pre>${esc(d.content)}</pre></div>`; }
 function openLink(u) { if (u.endsWith('#')) return false; if (tg && tg.openLink) { tg.openLink(u); return false; } return true; }
 async function adec(id, a) { if (a === 'approve' && !(await confirmBox('Одобрить действие #' + id + '?'))) return; haptic('medium'); await post(`/api/actions/${id}/${a}`); toast(a === 'approve' ? '✅ Одобрено' : '✖ Отклонено'); refresh(); }

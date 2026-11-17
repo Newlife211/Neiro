@@ -6,6 +6,7 @@ import { decideProject, dailyMetrics } from './company.js';
 import { decideAdoption, ADOPTION_RU } from './radar.js';
 import { answerQuestion, giveOrder, createMeeting } from './director.js';
 import { J } from './db.js';
+import { TEST_RU, VERDICT_RU } from './marketing.js';
 
 const HELP = `Я — связь с вашей компанией.
 
@@ -18,6 +19,7 @@ const HELP = `Я — связь с вашей компанией.
 /approvals — что ждёт вашего решения
 /questions — вопросы сотрудников
 /meeting повестка — созвать совещание руководителей
+/marketing — тесты спроса и реклама
 /feed all|important|off — сколько событий присылать
 /stop — СТОП всех внешних действий
 /resume — снять СТОП`;
@@ -90,6 +92,8 @@ export function createTelegram(ctx) {
         if (type === 'a') { const r = await ctx.actions.decide(Number(id), val === 'y', 'director:telegram'); msg = `#${id}: ${r.status}`; }
         if (type === 'p') { const r = decideProject(ctx, Number(id), val === 'y', 'director:telegram'); msg = `Проект «${r.name}»: ${r.stage}`; }
         if (type === 't') { const r = decideAdoption(ctx, Number(id), val === 'y', 'director:telegram'); msg = `«${r.title}»: ${ADOPTION_RU[r.status]}`; }
+        if (type === 'm') { const r = ctx.marketing.decideTest(Number(id), val === 'y', 'director:telegram'); msg = `Тест «${r.title}»: ${TEST_RU[r.status]}`; }
+        if (type === 'v') { const r = ctx.marketing.decideVerdict(Number(id), val, 'director:telegram'); msg = `Тест «${r.title}»: ${VERDICT_RU[r.decision] || r.decision}`; }
         if (type === 'q') {
           const q = db.get('SELECT options FROM questions WHERE id=?', Number(id));
           const opt = J(q?.options, [])[Number(val)];
@@ -116,7 +120,7 @@ export function createTelegram(ctx) {
     switch (cmd.replace(/@.*$/, '')) {
       case '/start': case '/help': return send(HELP, cabinetBtn);
       case '/cabinet': return cabinetBtn ? send('Ваш кабинет:', cabinetBtn) : send('Кабинет работает только по https: задайте PUBLIC_URL=https://ваш-домен.');
-      case '/stop': db.setSetting('stopped', true); db.audit('director:telegram', 'stop', null); db.feed('🛑', 'Директор включил режим «СТОП»: внешние действия приостановлены', null, 'bad'); return send('🛑 СТОП включён. Агенты продолжают думать и готовить, но ничего не отправляют и не тратят.');
+      case '/stop': { db.setSetting('stopped', true); const n = await ctx.marketing.stopAllAds(); if (n) await send(`⏸ Реклама на паузе: ${n} кампан.`); } db.audit('director:telegram', 'stop', null); db.feed('🛑', 'Директор включил режим «СТОП»: внешние действия приостановлены', null, 'bad'); return send('🛑 СТОП включён. Агенты продолжают думать и готовить, но ничего не отправляют и не тратят.');
       case '/resume': db.setSetting('stopped', false); db.audit('director:telegram', 'resume', null); db.feed('▶', 'Директор снял режим «СТОП»', null, 'good'); return send('▶ Работа возобновлена.');
       case '/status': {
         const m = dailyMetrics(db, cfg);
@@ -138,6 +142,11 @@ export function createTelegram(ctx) {
         if (!arg) return send('Напишите повестку: /meeting Как выйти на первую выручку за 2 недели');
         const m = createMeeting(ctx, { agenda: arg, via: 'telegram' });
         return send(`📣 Совещание #${m.id} созвано, участников: ${m.participants.length}. Когда соберу доклады, пришлю протокол с решениями.`);
+      }
+      case '/marketing': {
+        const ts = ctx.marketing.list().filter((t) => ['proposed', 'approved', 'running', 'reporting'].includes(t.status) || (t.status === 'done' && !t.decision));
+        if (!ts.length) return send('📣 Активных тестов спроса нет.');
+        return send('📣 Тесты спроса\n\n' + ts.map((t) => `#${t.id} ${t.title}${t.project ? ` (${t.project})` : ''}\n${TEST_RU[t.status]}${t.status === 'running' ? ` · день ${t.day}/${t.days}` : ''} · потрачено ${t.spent}/${t.budget_base} ${cfg.baseCurrency} · заявок ${t.total.leads} · покупок ${t.total.purchases}${t.total.cpl != null ? ` · заявка ${t.total.cpl}` : ''}`).join('\n\n'));
       }
       case '/feed': {
         const lvl = ['all', 'important', 'off'].includes(rest[0]) ? rest[0] : null;
@@ -162,7 +171,7 @@ export function createTelegram(ctx) {
     await api('setMyCommands', { commands: [
       { command: 'cabinet', description: 'Кабинет директора' }, { command: 'status', description: 'Цифры компании' },
       { command: 'approvals', description: 'Что ждёт решения' }, { command: 'questions', description: 'Вопросы сотрудников' },
-      { command: 'meeting', description: 'Созвать совещание' }, { command: 'feed', description: 'Лента событий' },
+      { command: 'meeting', description: 'Созвать совещание' }, { command: 'marketing', description: 'Тесты спроса и реклама' }, { command: 'feed', description: 'Лента событий' },
       { command: 'stop', description: 'СТОП внешних действий' }, { command: 'resume', description: 'Снять СТОП' },
     ] }).catch(() => {});
     if (cabinetUrl) await api('setChatMenuButton', { chat_id: Number(cfg.telegram.directorChatId), menu_button: { type: 'web_app', text: 'Кабинет', web_app: { url: cabinetUrl } } }).catch(() => {});

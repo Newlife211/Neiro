@@ -61,6 +61,26 @@ CREATE TABLE IF NOT EXISTS meetings (
   id INTEGER PRIMARY KEY AUTOINCREMENT, agenda TEXT NOT NULL, participants TEXT, status TEXT NOT NULL, summary_task_id INTEGER, protocol TEXT, protocol_doc_id INTEGER,
   created_at TEXT DEFAULT (datetime('now')), finished_at TEXT);
 CREATE TABLE IF NOT EXISTS meeting_tasks (meeting_id INTEGER, task_id INTEGER, agent_id TEXT, PRIMARY KEY(meeting_id, task_id));
+CREATE TABLE IF NOT EXISTS mk_tests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE NOT NULL, project_id INTEGER, title TEXT NOT NULL, hypothesis TEXT, segment TEXT, offer TEXT,
+  channels TEXT NOT NULL DEFAULT '[]', budget REAL NOT NULL, currency TEXT NOT NULL, budget_base REAL NOT NULL, days INTEGER NOT NULL,
+  stop_rules TEXT DEFAULT '{}', success TEXT DEFAULT '{}', landing_url TEXT, status TEXT NOT NULL, proposed_by TEXT, director_note TEXT,
+  finish_reason TEXT, report TEXT, verdict TEXT, decision TEXT, report_doc_id INTEGER, started_at TEXT, ends_at TEXT,
+  created_at TEXT DEFAULT (datetime('now')), decided_at TEXT, finished_at TEXT);
+CREATE TABLE IF NOT EXISTS mk_campaigns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, test_id INTEGER NOT NULL, channel TEXT NOT NULL, ext_id TEXT, extra TEXT, name TEXT, url TEXT,
+  daily_budget_base REAL DEFAULT 0, status TEXT NOT NULL DEFAULT 'paused', spec TEXT, stop_reason TEXT, created_by TEXT,
+  created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS mk_metrics (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, test_id INTEGER NOT NULL, campaign_id INTEGER NOT NULL DEFAULT 0, channel TEXT NOT NULL, day TEXT NOT NULL,
+  impressions INTEGER DEFAULT 0, clicks INTEGER DEFAULT 0, spend REAL DEFAULT 0, currency TEXT, spend_base REAL DEFAULT 0, leads INTEGER DEFAULT 0, sales INTEGER DEFAULT 0,
+  source TEXT NOT NULL, note TEXT, updated_at TEXT DEFAULT (datetime('now')), UNIQUE(test_id, campaign_id, channel, day, source));
+CREATE TABLE IF NOT EXISTS mk_links (code TEXT PRIMARY KEY, test_id INTEGER NOT NULL, channel TEXT NOT NULL, medium TEXT, campaign TEXT, content TEXT, url TEXT NOT NULL,
+  clicks INTEGER DEFAULT 0, created_by TEXT, created_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS mk_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), test_id INTEGER NOT NULL, event TEXT NOT NULL, channel TEXT, medium TEXT, campaign TEXT, content TEXT,
+  visitor TEXT, value REAL, currency TEXT, value_base REAL, dk TEXT, UNIQUE(test_id, dk));
+CREATE INDEX IF NOT EXISTS mk_events_t ON mk_events(test_id, event);
 CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), actor TEXT, event TEXT, data TEXT);
 `;
 

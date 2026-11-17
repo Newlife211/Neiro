@@ -15,6 +15,8 @@ import { revolutConfig, revolutClient } from './revolut.js';
 import { payseraConfig } from './bank.js';
 import { applyRates } from './fx.js';
 import { radarConfig } from './radar.js';
+import { createMarketing } from './marketing.js';
+import { adsConfig } from './ads.js';
 
 const log = {
   info: (...a) => console.log(new Date().toISOString(), '[info]', ...a),
@@ -30,8 +32,10 @@ export function createApp(cfg, opts = {}) {
   ctx.revolut = opts.revolut || (ctx.revolutCfg.enabled ? revolutClient(ctx.revolutCfg, db, ctx.fetch) : null);
   ctx.paysera = opts.paysera || payseraConfig();
   ctx.radarCfg = opts.radarCfg || radarConfig();
-  ctx.executors = opts.executors || buildExecutors(cfg, ctx.fetch, { revolut: () => ctx.revolut, revolutCfg: ctx.revolutCfg });
+  ctx.adsCfg = opts.adsCfg || adsConfig();
+  ctx.executors = opts.executors || buildExecutors(cfg, ctx.fetch, { revolut: () => ctx.revolut, revolutCfg: ctx.revolutCfg, adsCfg: ctx.adsCfg });
   ctx.actions = createActions(ctx);
+  ctx.marketing = createMarketing(ctx, { adsCfg: ctx.adsCfg, platforms: opts.platforms });
   ctx.llm = createLLM(ctx);
   ctx.runtime = createAgentRuntime(ctx);
   ctx.telegram = createTelegram(ctx);

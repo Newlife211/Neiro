@@ -88,6 +88,17 @@ export function createHttp(ctx) {
   R('GET', /^\/api\/agents\/([a-z0-9_]+)\/tasks$/, (q, m) => db.all(`SELECT id,title,status,created_by,created_at,finished_at,substr(result,1,500) result,error FROM tasks WHERE agent_id=? ORDER BY id DESC LIMIT 15`, m[1]));
   R('GET', /^\/api\/meetings$/, () => ({ meetings: meetingsView(db), heads: heads(db) }));
   R('POST', /^\/api\/meetings$/, (q, m, b) => createMeeting(ctx, { agenda: b.agenda, participants: b.participants, via: 'cabinet' }));
+  // ---- маркетинг: тесты спроса ----
+  const dir = { id: 'director:panel', name: 'Директор' };
+  R('GET', /^\/api\/marketing$/, () => ({ tests: ctx.marketing.list(), platforms: { meta: ctx.marketing.platforms.meta.enabled, google: ctx.marketing.platforms.google.enabled }, base: cfg.baseCurrency,
+    ads_month: db.get(`SELECT COALESCE(SUM(amount_base),0) s FROM ledger WHERE category='ads' AND direction='out' AND ts>=datetime('now','start of month')`).s }));
+  R('GET', /^\/api\/marketing\/tests\/(\d+)$/, (q, m) => ctx.marketing.details(Number(m[1])) || (() => { throw Object.assign(new Error('Тест не найден'), { code: 404 }); })());
+  R('POST', /^\/api\/marketing\/tests\/(\d+)\/(approve|reject)$/, (q, m, b) => ctx.marketing.decideTest(Number(m[1]), m[2] === 'approve', 'director:panel', b.note || ''));
+  R('POST', /^\/api\/marketing\/tests\/(\d+)\/stop$/, (q, m, b) => ctx.marketing.stopTest(Number(m[1]), 'director:panel', b.reason || 'Остановлен директором'));
+  R('POST', /^\/api\/marketing\/tests\/(\d+)\/verdict$/, (q, m, b) => ctx.marketing.decideVerdict(Number(m[1]), b.verdict, 'director:panel', b.note || ''));
+  R('POST', /^\/api\/marketing\/tests\/(\d+)\/metrics$/, (q, m, b) => ctx.marketing.logMetrics(dir, { ...b, test_id: Number(m[1]) }));
+  R('POST', /^\/api\/marketing\/campaigns\/(\d+)\/(activate|pause)$/, (q, m) => ctx.marketing.campaign(dir, { op: m[2], campaign_id: Number(m[1]), reason: 'Директор' }));
+  R('POST', /^\/api\/marketing\/sync$/, () => ctx.marketing.sync());
   R('GET', /^\/api\/radar$/, () => ({
     adoptions: db.all(`SELECT a.*, g.name proposer FROM adoptions a LEFT JOIN agents g ON g.id=a.proposed_by ORDER BY CASE a.status WHEN 'proposed' THEN 0 WHEN 'pilot_done' THEN 1 WHEN 'security_review' THEN 2 WHEN 'pilot' THEN 3 ELSE 4 END, a.id DESC LIMIT 100`).map((x) => ({ ...x, status_ru: ADOPTION_RU[x.status] })),
     items: db.all(`SELECT id,source,title,url,summary,signal,verdict,relevance,assessment,fetched_at FROM radar_items ORDER BY CASE verdict WHEN 'pilot' THEN 0 WHEN 'watch' THEN 1 WHEN NULL THEN 2 ELSE 3 END, COALESCE(relevance,0) DESC, id DESC LIMIT 150`),
@@ -104,7 +115,7 @@ export function createHttp(ctx) {
     db.setSetting('bank_polled_at', Date.now());
     return { added, ...rec, fx: !!fx };
   });
-  R('GET', /^\/api\/overview$/, () => ({ ...dailyMetrics(db, cfg), balances: balances(), questions_open: db.get(`SELECT COUNT(*) n FROM questions WHERE status='open'`).n, meetings_active: db.get(`SELECT COUNT(*) n FROM meetings WHERE status!='done'`).n, bank_unmatched: db.get(`SELECT COUNT(*) n FROM bank_tx WHERE status='unmatched'`).n, adoptions_waiting: db.get(`SELECT COUNT(*) n FROM adoptions WHERE status IN ('proposed','pilot_done')`).n, paused: db.setting('paused', false), warnings: configWarnings(cfg), limits: cfg.limits, base: cfg.baseCurrency, telegram: !!ctx.telegram?.enabled }));
+  R('GET', /^\/api\/overview$/, () => ({ ...dailyMetrics(db, cfg), balances: balances(), questions_open: db.get(`SELECT COUNT(*) n FROM questions WHERE status='open'`).n, meetings_active: db.get(`SELECT COUNT(*) n FROM meetings WHERE status!='done'`).n, bank_unmatched: db.get(`SELECT COUNT(*) n FROM bank_tx WHERE status='unmatched'`).n, adoptions_waiting: db.get(`SELECT COUNT(*) n FROM adoptions WHERE status IN ('proposed','pilot_done')`).n, marketing_waiting: db.get(`SELECT COUNT(*) n FROM mk_tests WHERE status='proposed' OR (status='done' AND decision IS NULL)`).n, marketing_running: db.get(`SELECT COUNT(*) n FROM mk_tests WHERE status='running'`).n, paused: db.setting('paused', false), warnings: configWarnings(cfg), limits: cfg.limits, base: cfg.baseCurrency, telegram: !!ctx.telegram?.enabled }));
   R('GET', /^\/api\/actions$/, (q) => db.all(`SELECT a.*, g.name agent_name FROM actions a LEFT JOIN agents g ON g.id=a.agent_id WHERE (?='' OR a.status=?) ORDER BY a.id DESC LIMIT 200`, q.status || '', q.status || '').map((a) => ({ ...a, payload: J(a.payload, {}), result: J(a.result) })));
   R('GET', /^\/api\/projects$/, () => db.all(`SELECT p.*, (SELECT COALESCE(SUM(amount_base),0) FROM ledger l WHERE l.project_id=p.id AND l.direction='in') revenue FROM projects p ORDER BY p.id DESC`));
   R('GET', /^\/api\/tasks$/, (q) => db.all(`SELECT t.id,t.title,t.status,t.dept,t.agent_id,g.name agent_name,t.priority,t.created_by,t.project_id,t.created_at,t.finished_at,substr(t.result,1,600) result,t.error FROM tasks t LEFT JOIN agents g ON g.id=t.agent_id WHERE (?='' OR t.status=?) ORDER BY t.id DESC LIMIT 200`, q.status || '', q.status || ''));
@@ -138,9 +149,10 @@ export function createHttp(ctx) {
     if (b.enabled !== undefined) db.feed(b.enabled ? '🤝' : '🚪', `Директор ${b.enabled ? 'включил в штат' : 'вывел из штата'}: ${a.name}`, a.id);
     return db.get('SELECT id,name,enabled,email FROM agents WHERE id=?', a.id);
   });
-  R('POST', /^\/api\/control$/, (q, m, b) => {
+  R('POST', /^\/api\/control$/, async (q, m, b) => {
     if (b.stopped !== undefined) { db.setSetting('stopped', !!b.stopped); db.feed(b.stopped ? '🛑' : '▶', b.stopped ? 'Директор включил режим «СТОП»' : 'Директор снял режим «СТОП»', null, b.stopped ? 'bad' : 'good'); }
     if (b.paused !== undefined) { db.setSetting('paused', !!b.paused); db.feed(b.paused ? '⏸' : '▶', b.paused ? 'Директор поставил агентов на паузу' : 'Агенты снова работают'); }
+    if (b.stopped) await ctx.marketing.stopAllAds();
     db.audit('director:panel', 'control', b);
     return { stopped: db.setting('stopped', false), paused: db.setting('paused', false) };
   });
@@ -162,11 +174,30 @@ export function createHttp(ctx) {
       if (req.method === 'GET' && (p === '/tg' || p === '/tg/')) return send(res, 200, fs.readFileSync(path.join(cfg.root, 'public', 'miniapp.html'), 'utf8'), 'text/html; charset=utf-8');
       if (req.method === 'GET' && p === '/paid') return send(res, 200, '<!doctype html><meta charset="utf-8"><title>Спасибо</title><body style="font-family:sans-serif;padding:40px">Спасибо! Оплата обрабатывается — подтверждение придёт на почту.</body>', 'text/html; charset=utf-8');
 
+      // Маркетинг: короткие ссылки с метками и счётчик лендингов (публично, без токена)
+      if (req.method === 'GET' && p.startsWith('/go/')) {
+        const loc = ctx.marketing.go(p.slice(4).replace(/[^A-Za-z0-9_-]/g, ''));
+        if (!loc) return send(res, 404, 'Ссылка не найдена', 'text/plain; charset=utf-8');
+        res.writeHead(302, { Location: loc, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' }); return res.end();
+      }
+      if (req.method === 'GET' && p === '/t.js') {
+        res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=3600', 'Access-Control-Allow-Origin': '*', 'X-Content-Type-Options': 'nosniff' });
+        return res.end(ctx.marketing.snippet());
+      }
+      if (p === '/t' && (req.method === 'POST' || req.method === 'OPTIONS')) {
+        const h = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Cache-Control': 'no-store' };
+        if (req.method === 'OPTIONS') { res.writeHead(204, h); return res.end(); }
+        let body = {};
+        try { const raw = await readBody(req); if (raw.length > 2000) throw new Error('big'); body = JSON.parse(raw || '{}'); } catch { res.writeHead(400, h); return res.end(); }
+        const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+        res.writeHead(ctx.marketing.track(body, ip).code, h); return res.end();
+      }
       if (req.method === 'POST' && p === '/webhooks/stripe') {
         const raw = await readBody(req);
         if (!verifyStripeSignature(raw, req.headers['stripe-signature'], cfg.stripe.webhookSecret)) return send(res, 400, { error: 'bad signature' });
         const ev = JSON.parse(raw);
         const msg = handleStripeEvent(db, cfg, ev);
+        try { ctx.marketing.attributeStripe(ev); } catch (e) { ctx.log?.error('mk attribution', e.message); }
         db.audit('stripe', 'webhook', { id: ev.id, type: ev.type });
         if (msg) { db.feed('💰', msg, null, 'good'); ctx.notify?.(msg); }
         return send(res, 200, { received: true });

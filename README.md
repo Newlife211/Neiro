@@ -25,6 +25,7 @@
 - [docs/DEPLOY.md](docs/DEPLOY.md) — запуск на VPS шаг за шагом
 - [docs/LAUNCH-CHECKLIST.md](docs/LAUNCH-CHECKLIST.md) — что сделать до первых реальных денег
 - [docs/TELEGRAM.md](docs/TELEGRAM.md) — Telegram: поручения, вопросы сотрудников, совещания и мини-приложение «Кабинет директора»
+- [docs/MARKETING.md](docs/MARKETING.md) — маркетинг проектов: тесты спроса с бюджетом, реклама Meta/Google, метки, счётчик лендинга, отчёты
 - [docs/TECH-RADAR.md](docs/TECH-RADAR.md) — технологическая разведка: ежедневный мониторинг ИИ и технологий, пилоты и внедрения
 - [docs/FINANCE.md](docs/FINANCE.md) — курсы валют, карта Revolut под каждую трату, выписки и автосверка
 - [docs/SECURITY.md](docs/SECURITY.md) — лимиты, подтверждения, защита

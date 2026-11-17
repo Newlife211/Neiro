@@ -106,6 +106,7 @@ export function createScheduler(ctx) {
     meetingTick(ctx);
     ctx.telegram?.forwardFeed?.();
     await finance();
+    await ctx.marketing?.tick(hour(), once).catch((e) => ctx.log?.error('marketing', e.message));
     const h = hour();
     if (h >= 7) once('radar', () => { radarMorning().catch((e) => ctx.log?.error('radar', e.message)); });
     if (h >= 8) once('morning', morning);

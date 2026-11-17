@@ -1,8 +1,10 @@
 // Исполнители внешних действий. Каждый получает уже разрешённое политикой действие.
 import { stripeClient, yookassaClient } from './payments.js';
+import { adsConfig, socialPublisher } from './ads.js';
 
 export function buildExecutors(cfg, fetchImpl = fetch, extra = {}) {
   const stripe = stripeClient(cfg, fetchImpl), yk = yookassaClient(cfg, fetchImpl);
+  const social = socialPublisher(extra.adsCfg || adsConfig(), fetchImpl);
 
   async function agentmail(method, path, body) {
     if (!cfg.agentmail.apiKey) throw new Error('AgentMail не настроен (AGENTMAIL_API_KEY)');
@@ -43,6 +45,19 @@ export function buildExecutors(cfg, fetchImpl = fetch, extra = {}) {
       if (!chat) return { status: 'manual', result: { note: 'Не задан TELEGRAM_CHANNEL_ID — опубликуйте пост вручную' } };
       const m = await telegram('sendMessage', { chat_id: chat, text: a.payload.text, disable_web_page_preview: false });
       return { result: { message_id: m.message_id } };
+    },
+    // Соцсети проекта: Telegram-канал, Instagram, LinkedIn. Сообщества и форумы — всегда вручную, от имени человека.
+    async post_social(a) {
+      const p = a.payload, net = String(p.network || '').toLowerCase();
+      if (net === 'telegram') {
+        const chat = process.env.TELEGRAM_CHANNEL_ID;
+        if (!chat) return { status: 'manual', result: { note: 'Не задан TELEGRAM_CHANNEL_ID — опубликуйте пост вручную' } };
+        const m = await telegram('sendMessage', { chat_id: chat, text: p.text, disable_web_page_preview: false });
+        return { result: { network: net, message_id: m.message_id } };
+      }
+      if ((net === 'instagram' || net === 'linkedin') && social.has(net)) return { result: { network: net, ...(await social[net]({ text: p.text, image_url: p.image_url })) } };
+      const why = net === 'community' ? 'Посты в сообществах и на форумах публикует человек от своего имени' : `Публикация в «${net || '?'}» через API не подключена`;
+      return { status: 'manual', result: { note: `${why}: скопируйте текст из пульта и опубликуйте.` } };
     },
     async create_payment_link(a, { db }) {
       const p = a.payload, provider = p.provider || (a.currency === 'RUB' ? 'yookassa' : 'stripe');

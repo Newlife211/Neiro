@@ -3,6 +3,8 @@ import { toBase, round2 } from './policy.js';
 import { J } from './db.js';
 
 const PROVIDER_PAYOUT = /stripe|yookassa|юkassa|yoomoney|юmoney|paddle/i;
+// Списания рекламных площадок: расход уже учтён по данным кабинетов (ledger, category=ads)
+const ADS_BILLING = /facebk|facebook|meta platforms|meta ads|google\s*\*?\s*ads|google ads|adwords|tiktok|linkedin|yandex.?direct|яндекс.?директ/i;
 
 export function insertBankTx(db, cfg, t) {
   const amountBase = toBase(cfg, Math.abs(t.amount), t.currency) * Math.sign(t.amount);
@@ -81,7 +83,7 @@ export async function importBanks(ctx) {
  */
 export async function reconcile(ctx) {
   const { db, cfg } = ctx;
-  const res = { cards: 0, payouts: 0, internal: 0, linked: 0, unmatched: 0 };
+  const res = { cards: 0, payouts: 0, ads: 0, internal: 0, linked: 0, unmatched: 0 };
   const rows = db.all(`SELECT * FROM bank_tx WHERE status='new' ORDER BY ts`);
   for (const t of rows) {
     // 1) карта под трату
@@ -102,6 +104,8 @@ export async function reconcile(ctx) {
     }
     // 2) выплаты платёжных провайдеров
     if (t.amount > 0 && PROVIDER_PAYOUT.test(`${t.description} ${t.counterparty}`)) { db.run(`UPDATE bank_tx SET status='payout' WHERE id=?`, t.id); res.payouts++; continue; }
+    // 2б) счета рекламных площадок
+    if (t.amount < 0 && ADS_BILLING.test(`${t.description} ${t.counterparty}`)) { db.run(`UPDATE bank_tx SET status='ads_billing' WHERE id=?`, t.id); res.ads++; continue; }
     // 3) внутренние переводы и обмены
     if (t.kind === 'internal') { db.run(`UPDATE bank_tx SET status='internal' WHERE id=?`, t.id); res.internal++; continue; }
     // 4) совпадение с записью в учёте

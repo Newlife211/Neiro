@@ -109,7 +109,7 @@ test('сверка: выплата Stripe, внутренний перевод, 
   insertBankTx(db, cfg, { provider: 'paysera', extId: 'p1', ts: now, amount: -12, currency: 'EUR', description: 'Figma subscription' });
   insertBankTx(db, cfg, { provider: 'paysera', extId: 'p2', ts: now, amount: -7.5, currency: 'EUR', description: 'Неизвестный платёж', counterparty: 'ACME' });
   const r = await reconcile(app);
-  assert.deepEqual(r, { cards: 0, payouts: 1, internal: 2, linked: 1, unmatched: 1 });
+  assert.deepEqual(r, { cards: 0, payouts: 1, ads: 0, internal: 2, linked: 1, unmatched: 1 });
   const u = db.get(`SELECT * FROM bank_tx WHERE status='unmatched'`);
   resolveBankTx(db, u.id, { as: 'expense', category: 'bank_fees' });
   const l = db.get(`SELECT * FROM ledger WHERE source='bank'`);
