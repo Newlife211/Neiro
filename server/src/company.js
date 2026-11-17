@@ -6,6 +6,7 @@ import { updateRates } from './fx.js';
 import { importBanks, reconcile } from './bank.js';
 import { collect, dailyRadarTask } from './radar.js';
 import { meetingTick } from './director.js';
+import { SOCIAL, socialRights } from './ads.js';
 
 export function decideProject(ctx, id, approve, by = 'director', note = '') {
   const { db } = ctx;
@@ -102,6 +103,31 @@ export function createScheduler(ctx) {
     }
   }
 
+  // Соцсети ведут агенты: каждый день — контент в подключённые площадки (в рамках прав директора)
+  function contentDay() {
+    if (!ctx.social || !db.get(`SELECT 1 FROM agents WHERE id='mk_smm' AND enabled=1`)) return;
+    const rights = socialRights(db);
+    const nets = Object.keys(SOCIAL).filter((k) => ctx.social.has(k) && rights[k] !== 'off');
+    if (!nets.length) return;
+    const projects = db.all(`SELECT id,name,stage,summary FROM projects WHERE stage IN ('build','test','launch','revenue') ORDER BY id DESC LIMIT 5`);
+    const tests = db.all(`SELECT id,title,project_id FROM mk_tests WHERE status IN ('approved','running')`);
+    addTask(db, { title: 'Контент дня в соцсетях', agentId: 'mk_smm', dept: 'marketing', priority: 4, createdBy: 'system',
+      body: `Подключённые площадки и права директора: ${nets.map((k) => `${SOCIAL[k].title} (${k}) — ${rights[k] === 'auto' ? 'публикуешь сама' : 'с одобрением директора'}`).join('; ')}.
+Проекты: ${projects.map((p) => `#${p.id} ${p.name} (${p.stage})`).join(', ') || 'пока нет активных — пиши о компании и пользе ИИ-инструментов'}. Идущие тесты спроса: ${tests.map((t) => `#${t.id} ${t.title} — ссылки только через mk_link`).join(', ') || 'нет'}.
+Сделай 1–3 поста на сегодня по контент-плану (read_documents kind=plan; нет плана — составь на неделю и сохрани через write_document). Пиши под формат площадки: Instagram — с картинкой (image_url, публичная ссылка), X — до 280 знаков, Reddit и Telegram-чаты — только полезный материал по правилам сообщества, с заголовком, не чаще раза в неделю в одно сообщество, открыто от имени компании. Публикуй через propose_action(post_social). Тексты с обещаниями результата, цен и сравнения с конкурентами — сначала юристу. Итог — список опубликованного в 3 строки.` });
+  }
+
+  // Токены соцсетей: Threads продлеваем сами, о LinkedIn напоминаем директору за неделю
+  async function tokens() {
+    const wd = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: cfg.workHours.tz }).format(new Date());
+    if (wd === 'Mon' && ctx.social?.has('threads')) { const t = await ctx.social.refreshThreadsToken(); if (t) db.setSetting('threads_token', t); }
+    const exp = ctx.adsCfg?.linkedin?.expires;
+    if (exp && !isNaN(Date.parse(exp))) {
+      const days = Math.ceil((Date.parse(exp) - Date.now()) / 86400000);
+      if (days <= 7) ctx.notify?.(`🔑 Токен LinkedIn ${days > 0 ? `истекает через ${days} дн.` : 'истёк'} — выпустите новый и обновите LINKEDIN_ACCESS_TOKEN и LINKEDIN_TOKEN_EXPIRES в .env. Иначе агенты не смогут публиковать в LinkedIn.`);
+    }
+  }
+
   async function tick() {
     meetingTick(ctx);
     ctx.telegram?.forwardFeed?.();
@@ -110,6 +136,8 @@ export function createScheduler(ctx) {
     const h = hour();
     if (h >= 7) once('radar', () => { radarMorning().catch((e) => ctx.log?.error('radar', e.message)); });
     if (h >= 8) once('morning', morning);
+    if (h >= 11) once('content', contentDay);
+    if (h >= 9) once('tokens', () => { tokens().catch((e) => ctx.log?.error('tokens', e.message)); });
     if (h >= 20) once('evening', () => {
       const m = dailyMetrics(db, cfg);
       ctx.notify?.(`🌙 Итоги дня\nВыручка за сутки: ${m.revenue_24h} ${cfg.baseCurrency}\nРасходы: ${m.expenses_24h} ${cfg.baseCurrency}\nClaude API: ${m.claude_api_24h} ${cfg.baseCurrency}\nЗадач выполнено: ${m.tasks_done_24h}, сбоев: ${m.tasks_failed_24h}\nЖдут вашего решения: ${m.pending_approvals}\nПроекты: ${m.projects.map((p) => `${p.name} (${STAGE_RU[p.stage]})`).join(', ') || 'нет'}`);
@@ -117,5 +145,5 @@ export function createScheduler(ctx) {
     await pollInbound();
   }
   let t;
-  return { finance, radarMorning, start() { t = setInterval(() => tick().catch((e) => ctx.log?.error('sched', e)), 60000); tick().catch(() => {}); }, stop() { clearInterval(t); }, tick, morning, pollInbound };
+  return { finance, radarMorning, contentDay, tokens, start() { t = setInterval(() => tick().catch((e) => ctx.log?.error('sched', e)), 60000); tick().catch(() => {}); }, stop() { clearInterval(t); }, tick, morning, pollInbound };
 }

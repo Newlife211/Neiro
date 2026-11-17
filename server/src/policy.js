@@ -1,4 +1,5 @@
 // Политика: что агенты делают сами, а что — только после «да» директора.
+import { SOCIAL, socialRights, RIGHTS_RU } from './ads.js';
 // Решение директора: траты до лимита — сами; выше лимита и любые необратимые действия — с подтверждением.
 
 export const KINDS = {
@@ -64,6 +65,21 @@ export function evaluate(db, cfg, action) {
     let amountBase = 0;
     if (action.amount) amountBase = toBase(cfg, action.amount, action.currency);
     return { decision: 'approval', reason: 'Необратимое действие — только с подтверждением директора', amountBase };
+  }
+
+  if (action.kind === 'post_social') {
+    const net = String(p.network || '').toLowerCase(), s = SOCIAL[net];
+    if (!s) return { decision: 'deny', reason: 'Неизвестная площадка: ' + (net || '—'), amountBase: 0 };
+    if (!p.text) return { decision: 'deny', reason: 'Пустой пост', amountBase: 0 };
+    const right = socialRights(db)[net];
+    if (right === 'off') return { decision: 'deny', reason: `Директор запретил агентам публикации в «${s.title}»`, amountBase: 0 };
+    if (!s.own) {
+      if (!p.target) return { decision: 'deny', reason: `Для «${s.title}» нужен target: ${s.target}`, amountBase: 0 };
+      p.target = String(p.target).trim().replace(/^\/?r\//i, ''); // одно сообщество — одна запись, как бы его ни написали
+      const recent = db.get(`SELECT id FROM actions WHERE kind='post_social' AND status IN ('auto','approved','executed') AND json_extract(payload,'$.network')=? AND lower(json_extract(payload,'$.target'))=lower(?) AND created_at>=datetime('now','-7 days') LIMIT 1`, net, String(p.target));
+      if (recent) return { decision: 'approval', reason: `В «${p.target}» уже был пост за последние 7 дней (#${recent.id}) — чаще только с вашего «да»`, amountBase: 0 };
+    }
+    if (right === 'approval') return { decision: 'approval', reason: `Права агентов: «${s.title}» — ${RIGHTS_RU.approval}`, amountBase: 0 };
   }
 
   if (k.cat === 'comm') {

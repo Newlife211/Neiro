@@ -15,25 +15,31 @@ export function adsConfig(env = process.env) {
       currency: (env.GOOGLE_ADS_CURRENCY || '').toUpperCase(),
     },
     instagram: { userId: env.IG_USER_ID || '', token: env.IG_ACCESS_TOKEN || env.META_ACCESS_TOKEN || '', version: env.META_API_VERSION || 'v23.0' },
-    linkedin: { token: env.LINKEDIN_ACCESS_TOKEN || '', orgUrn: env.LINKEDIN_ORG_URN || '', version: env.LINKEDIN_VERSION || '202510' },
+    linkedin: { token: env.LINKEDIN_ACCESS_TOKEN || '', orgUrn: env.LINKEDIN_ORG_URN || '', version: env.LINKEDIN_VERSION || '202510', expires: env.LINKEDIN_TOKEN_EXPIRES || '' },
+    facebook: { pageId: env.META_PAGE_ID || '', token: env.META_ACCESS_TOKEN || '', version: env.META_API_VERSION || 'v23.0' },
+    threads: { userId: env.THREADS_USER_ID || '', token: env.THREADS_ACCESS_TOKEN || '' },
+    x: { apiKey: env.X_API_KEY || '', apiSecret: env.X_API_SECRET || '', token: env.X_ACCESS_TOKEN || '', tokenSecret: env.X_ACCESS_SECRET || '' },
+    reddit: { clientId: env.REDDIT_CLIENT_ID || '', clientSecret: env.REDDIT_CLIENT_SECRET || '', username: env.REDDIT_USERNAME || '', password: env.REDDIT_PASSWORD || '' },
+    vk: { groupId: (env.VK_GROUP_ID || '').replace(/^-/, ''), token: env.VK_ACCESS_TOKEN || '' },
     telegramChannel: env.TELEGRAM_CHANNEL_ID || '',
+    telegramChats: (env.TELEGRAM_COMMUNITY_CHATS || '').split(',').map((x) => x.trim()).filter(Boolean),
   };
 }
 
-// Каналы. api — есть автоматизация через API; остальные ведутся вручную, цифры вносятся через mk_log.
+// Каналы. paid — платная реклама: агенты ведут её только там, где есть API (api).
+// Остальные каналы — работа агентов без рекламного кабинета: посты (post_social), письма, переписка; цифры — mk_log.
 export const CHANNELS = {
-  google: { title: 'Google Ads (поиск)', api: 'google' },
-  meta: { title: 'Meta (Facebook/Instagram)', api: 'meta' },
-  tiktok: { title: 'TikTok Ads', api: null },
-  linkedin: { title: 'LinkedIn Ads', api: null },
-  yandex: { title: 'Яндекс Директ', api: null },
+  google: { title: 'Google Ads (поиск)', api: 'google', paid: true },
+  meta: { title: 'Meta (Facebook/Instagram)', api: 'meta', paid: true },
+  tiktok: { title: 'TikTok Ads', api: null, paid: true },
+  linkedin: { title: 'LinkedIn Ads', api: null, paid: true },
+  yandex: { title: 'Яндекс Директ', api: null, paid: true },
   outreach: { title: 'Личная переписка', api: null },
   email: { title: 'Письма', api: null },
   community: { title: 'Сообщества и форумы', api: null },
   telegram: { title: 'Telegram', api: null },
   instagram: { title: 'Instagram (органика)', api: null },
   seo: { title: 'Статьи и поиск', api: null },
-  producthunt: { title: 'Каталоги и запуски', api: null },
   partners: { title: 'Партнёры и рефералы', api: null },
   other: { title: 'Другое', api: null },
 };
@@ -156,18 +162,72 @@ export function googleAds(c, fetchImpl = fetch) {
   };
 }
 
-// ---------------- Публикации: Instagram, LinkedIn, Telegram ----------------
-export function socialPublisher(c, fetchImpl = fetch) {
-  async function json(r, who) { const j = await r.json().catch(() => ({})); if (!r.ok || j.error) throw new Error(`${who}: ${j.error?.message || j.message || r.status}`); return j; }
+// ---------------- Публикации в соцсети ----------------
+// own — своя страница компании (по умолчанию агенты публикуют сами);
+// community — чужое сообщество (по умолчанию с одобрением директора, не чаще раза в неделю в одно место).
+export const SOCIAL = {
+  telegram: { title: 'Telegram-канал', own: true },
+  telegram_chat: { title: 'Telegram-чаты и группы', own: false, target: 'ID чата из TELEGRAM_COMMUNITY_CHATS' },
+  facebook: { title: 'Страница Facebook', own: true },
+  instagram: { title: 'Instagram', own: true },
+  threads: { title: 'Threads', own: true },
+  linkedin: { title: 'LinkedIn (страница компании)', own: true },
+  x: { title: 'X (Twitter)', own: true },
+  reddit: { title: 'Reddit', own: false, target: 'сабреддит без r/' },
+  vk: { title: 'ВКонтакте (сообщество)', own: true },
+};
+export const RIGHTS_RU = { auto: 'сами', approval: 'с одобрением', off: 'запрещено' };
+export function socialRights(db) {
+  const saved = db.setting('social_rights', {});
+  return Object.fromEntries(Object.entries(SOCIAL).map(([k, v]) => [k, saved[k] || (v.own ? 'auto' : 'approval')]));
+}
+
+const enc = (s) => encodeURIComponent(String(s)).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+// OAuth 1.0a (подпись HMAC-SHA1) — для X API от имени аккаунта компании
+export function oauth1Header(method, url, c, crypto, nonce, ts) {
+  const p = { oauth_consumer_key: c.apiKey, oauth_nonce: nonce || crypto.randomBytes(16).toString('hex'), oauth_signature_method: 'HMAC-SHA1', oauth_timestamp: String(ts || Math.floor(Date.now() / 1000)), oauth_token: c.token, oauth_version: '1.0' };
+  const base = [method.toUpperCase(), enc(url), enc(Object.keys(p).sort().map((k) => `${enc(k)}=${enc(p[k])}`).join('&'))].join('&');
+  const sig = crypto.createHmac('sha1', `${enc(c.apiSecret)}&${enc(c.tokenSecret)}`).update(base).digest('base64');
+  return 'OAuth ' + Object.entries({ ...p, oauth_signature: sig }).map(([k, v]) => `${enc(k)}="${enc(v)}"`).join(', ');
+}
+
+export function socialPublisher(c, fetchImpl = fetch, opts = {}) {
+  const crypto = opts.crypto;
+  const threadsToken = () => opts.threadsToken?.() || c.threads.token;
+  async function json(r, who) { const j = await r.json().catch(() => ({})); if (!r.ok || j.error) throw new Error(`${who}: ${j.error?.message || j.error?.error_msg || j.error_description || j.message || (typeof j.error === 'string' ? j.error : '') || r.status}`); return j; }
+  const postForm = (url, p, headers = {}) => fetchImpl(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers }, body: form(p).toString() });
+  let fbPageToken = null, redditToken = null, redditExp = 0;
+  const has = {
+    instagram: () => !!(c.instagram.userId && c.instagram.token), facebook: () => !!(c.facebook.pageId && c.facebook.token), threads: () => !!(c.threads.userId && threadsToken()),
+    linkedin: () => !!(c.linkedin.token && c.linkedin.orgUrn), x: () => !!(c.x.apiKey && c.x.apiSecret && c.x.token && c.x.tokenSecret),
+    reddit: () => !!(c.reddit.clientId && c.reddit.clientSecret && c.reddit.username && c.reddit.password), vk: () => !!(c.vk.groupId && c.vk.token),
+    telegram: () => !!c.telegramChannel, telegram_chat: () => c.telegramChats.length > 0,
+  };
   return {
-    has: (net) => net === 'instagram' ? !!(c.instagram.userId && c.instagram.token) : net === 'linkedin' ? !!(c.linkedin.token && c.linkedin.orgUrn) : net === 'telegram' ? !!c.telegramChannel : false,
+    has: (net) => !!has[net]?.(),
+    connected: () => Object.fromEntries(Object.keys(SOCIAL).map((k) => [k, !!has[k]?.()])),
     async instagram({ text, image_url }) {
       if (!image_url) throw new Error('Instagram публикует только с картинкой: нужен image_url (публичная ссылка на JPG)');
       const base = `https://graph.facebook.com/${c.instagram.version}/${c.instagram.userId}`;
-      const post = (path, p) => fetchImpl(base + path, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form({ ...p, access_token: c.instagram.token }).toString() });
-      const media = await json(await post('/media', { image_url, caption: text }), 'Instagram');
-      const pub = await json(await post('/media_publish', { creation_id: media.id }), 'Instagram');
+      const media = await json(await postForm(base + '/media', { image_url, caption: text, access_token: c.instagram.token }), 'Instagram');
+      const pub = await json(await postForm(base + '/media_publish', { creation_id: media.id, access_token: c.instagram.token }), 'Instagram');
       return { id: pub.id };
+    },
+    async facebook({ text, link }) {
+      const base = `https://graph.facebook.com/${c.facebook.version}/${c.facebook.pageId}`;
+      if (!fbPageToken) fbPageToken = (await json(await fetchImpl(`${base}?fields=access_token&access_token=${encodeURIComponent(c.facebook.token)}`), 'Facebook')).access_token || c.facebook.token;
+      const r = await json(await postForm(base + '/feed', { message: text, link, access_token: fbPageToken }), 'Facebook');
+      return { id: r.id };
+    },
+    async threads({ text, image_url }) {
+      const base = `https://graph.threads.net/v1.0/${c.threads.userId}`, tok = threadsToken();
+      const cont = await json(await postForm(base + '/threads', { media_type: image_url ? 'IMAGE' : 'TEXT', text, image_url, access_token: tok }), 'Threads');
+      const pub = await json(await postForm(base + '/threads_publish', { creation_id: cont.id, access_token: tok }), 'Threads');
+      return { id: pub.id };
+    },
+    async refreshThreadsToken() {
+      const r = await json(await fetchImpl(`https://graph.threads.net/refresh_access_token?grant_type=th_refresh_token&access_token=${encodeURIComponent(threadsToken())}`), 'Threads');
+      return r.access_token;
     },
     async linkedin({ text }) {
       const r = await fetchImpl('https://api.linkedin.com/rest/posts', { method: 'POST',
@@ -175,6 +235,32 @@ export function socialPublisher(c, fetchImpl = fetch) {
         body: JSON.stringify({ author: c.linkedin.orgUrn, commentary: text, visibility: 'PUBLIC', distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] }, lifecycleState: 'PUBLISHED', isReshareDisabledByAuthor: false }) });
       if (!r.ok) await json(r, 'LinkedIn');
       return { id: r.headers?.get?.('x-restli-id') || null };
+    },
+    async x({ text }) {
+      const url = 'https://api.x.com/2/tweets';
+      const r = await json(await fetchImpl(url, { method: 'POST', headers: { Authorization: oauth1Header('POST', url, c.x, crypto), 'Content-Type': 'application/json' }, body: JSON.stringify({ text: String(text).slice(0, 280) }) }), 'X');
+      return { id: r.data?.id };
+    },
+    async reddit({ text, title, link, target }) {
+      const sr = String(target || '').replace(/^\/?r\//i, '').replace(/[^A-Za-z0-9_]/g, '');
+      if (!sr) throw new Error('Reddit: укажи target — сабреддит');
+      if (!title) throw new Error('Reddit: нужен title');
+      const ua = { 'User-Agent': `server:neurosfera:1.0 (by /u/${c.reddit.username})` };
+      if (!redditToken || Date.now() > redditExp) {
+        const t = await json(await postForm('https://www.reddit.com/api/v1/access_token', { grant_type: 'password', username: c.reddit.username, password: c.reddit.password },
+          { ...ua, Authorization: 'Basic ' + Buffer.from(`${c.reddit.clientId}:${c.reddit.clientSecret}`).toString('base64') }), 'Reddit');
+        redditToken = t.access_token; redditExp = Date.now() + ((t.expires_in || 3600) - 120) * 1000;
+      }
+      const r = await json(await postForm('https://oauth.reddit.com/api/submit', { sr, kind: link ? 'link' : 'self', title: String(title).slice(0, 300), text: link ? undefined : text, url: link, api_type: 'json' },
+        { ...ua, Authorization: 'Bearer ' + redditToken }), 'Reddit');
+      const errs = r.json?.errors || [];
+      if (errs.length) throw new Error('Reddit: ' + errs.map((e) => e.join(' ')).join('; '));
+      return { id: r.json?.data?.name, url: r.json?.data?.url };
+    },
+    async vk({ text, link }) {
+      const r = await json(await postForm('https://api.vk.com/method/wall.post', { owner_id: '-' + c.vk.groupId, from_group: 1, message: text, attachments: link, access_token: c.vk.token, v: '5.199' }), 'VK');
+      if (r.error) throw new Error('VK: ' + r.error.error_msg);
+      return { id: r.response?.post_id };
     },
   };
 }

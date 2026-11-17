@@ -49,6 +49,8 @@ export function createTelegram(ctx) {
     const lines = [`⏳ Нужно ваше решение (#${a.id})`, `${KINDS[a.kind]?.title || a.kind}${ag ? ' — ' + ag.name + ', ' + ag.role : ''}`];
     if (a.amount) lines.push(`Сумма: ${a.amount} ${a.currency}${a.currency !== cfg.baseCurrency ? ` (≈ ${a.amount_base} ${cfg.baseCurrency})` : ''}`);
     if (p.vendor || p.purpose) lines.push(`На что: ${[p.vendor, p.purpose].filter(Boolean).join(' — ')}`);
+    if (p.network) lines.push(`Где: ${p.network}${p.target ? ' → ' + p.target : ''}`);
+    if (p.title) lines.push(`Заголовок: ${p.title}`);
     if (p.to) lines.push(`Кому: ${[].concat(p.to).join(', ')}`);
     if (p.subject) lines.push(`Тема: ${p.subject}`);
     if (p.text) lines.push(`Текст: ${String(p.text).slice(0, 700)}`);

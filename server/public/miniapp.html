@@ -456,7 +456,7 @@ const V = {
       <div class="k" style="margin:12px 0 6px">Свежие находки</div>${r.items.slice(0, 25).map((i) => `<div class="card"><a href="${/^https?:\/\//.test(i.url) ? esc(i.url) : '#'}" onclick="return openLink(this.href)" style="color:var(--b);text-decoration:none"><b>${esc(i.title)}</b></a><div class="note">${esc(i.assessment || i.summary || '')}</div></div>`).join('')}`;
   },
   async marketing() {
-    const r = await api('/api/marketing');
+    const [r, so] = await Promise.all([api('/api/marketing'), api('/api/social')]);
     const ST = { proposed: 'w', approved: 'b', running: 'b', reporting: 'w', done: 'g', rejected: 'r' }, VR = { go: 'масштабировать', iterate: 'ещё тест', kill: 'закрыть' };
     const f = (v) => (v == null ? '—' : v);
     return `<div class="card"><div class="row"><span class="note">реклама за месяц ${money(r.ads_month)} · Meta ${r.platforms.meta ? '✓' : 'вручную'} · Google ${r.platforms.google ? '✓' : 'вручную'}</span></div></div>
@@ -468,7 +468,9 @@ const V = {
         ${t.status === 'proposed' ? `<div class="note" style="margin-top:6px">${esc(t.hypothesis)}<br>Кому: ${esc(t.segment)}<br>Оффер: ${esc(t.offer)}<br>Каналы: ${t.channels.map((c) => esc(c.channel) + ' ' + c.budget).join(', ')}</div><div class="row" style="margin-top:8px"><button class="btn ok" onclick="mkDec(${t.id},'approve')">✅ Бюджет ${t.budget} ${esc(t.currency)}</button><button class="btn no" onclick="mkDec(${t.id},'reject')">✖</button></div>` : ''}
         ${['approved', 'running'].includes(t.status) ? `<div class="row" style="margin-top:8px"><button class="btn no" onclick="mkDec(${t.id},'stop')">⏹ Остановить тест</button></div>` : ''}
         ${t.status === 'done' && !t.decision ? `<div class="note" style="margin-top:6px">Команда советует: ${VR[t.verdict] || '—'}</div><div class="row" style="margin-top:6px"><button class="btn ok" onclick="mkV(${t.id},'go')">🚀</button><button class="btn" onclick="mkV(${t.id},'iterate')">🔁 Ещё тест</button><button class="btn no" onclick="mkV(${t.id},'kill')">✖ Закрыть</button>${t.report_doc_id ? `<button class="btn" onclick="openDoc(${t.report_doc_id})">Отчёт</button>` : ''}</div>` : ''}
-      </div>`).join('') || '<p class="note">Тестов спроса пока нет.</p>'}`;
+      </div>`).join('') || '<p class="note">Тестов спроса пока нет.</p>'}
+      <div class="k" style="margin:12px 0 6px">🔑 Права агентов в соцсетях</div>
+      ${so.networks.map((n) => `<div class="card"><div class="row"><b>${esc(n.title)}</b><span class="sp2"></span><span class="st ${n.connected ? 'g' : 'w'}">${n.connected ? 'подключена' : 'нет ключей'}</span></div><select style="margin-top:8px" onchange="setRight('${n.key}', this.value)">${[['auto', 'публикуют сами'], ['approval', 'с моим одобрением'], ['off', 'запрещено']].map(([v, t]) => `<option value="${v}"${n.right === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>`).join('')}`;
   },
   async money() {
     const [b, l] = await Promise.all([api('/api/bank'), api('/api/ledger')]);
@@ -484,6 +486,7 @@ const V = {
 };
 
 async function mkDec(id, a) { if (a !== 'reject' && !(await confirmBox(a === 'approve' ? 'Одобрить бюджет теста?' : 'Остановить тест и его рекламу?'))) return; haptic('medium'); await post(`/api/marketing/tests/${id}/${a}`); toast('Готово'); openSheet('marketing', true); refresh(); }
+async function setRight(n, r) { haptic(); await post('/api/social', { network: n, right: r }); toast('Права обновлены'); }
 async function mkV(id, v) { haptic('medium'); await post(`/api/marketing/tests/${id}/verdict`, { verdict: v }); toast('Решение принято'); openSheet('marketing', true); refresh(); }
 async function openDoc(id) { haptic(); const d = await api('/api/documents/' + id); current = null; $('#sh-title').textContent = '📄 ' + d.title; $('#sh-body').innerHTML = `<div class="card"><pre>${esc(d.content)}</pre></div>`; }
 function openLink(u) { if (u.endsWith('#')) return false; if (tg && tg.openLink) { tg.openLink(u); return false; } return true; }

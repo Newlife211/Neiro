@@ -13,6 +13,7 @@ import { importBanks, reconcile, resolveBankTx } from './bank.js';
 import { updateRates } from './fx.js';
 import { collect, decideAdoption, ADOPTION_RU, dailyRadarTask } from './radar.js';
 import { verifyInitData } from './tgauth.js';
+import { SOCIAL, socialRights, RIGHTS_RU } from './ads.js';
 import { answerQuestion, giveOrder, createMeeting, meetingsView, heads } from './director.js';
 
 const MAX_BODY = 1_000_000;
@@ -99,6 +100,15 @@ export function createHttp(ctx) {
   R('POST', /^\/api\/marketing\/tests\/(\d+)\/metrics$/, (q, m, b) => ctx.marketing.logMetrics(dir, { ...b, test_id: Number(m[1]) }));
   R('POST', /^\/api\/marketing\/campaigns\/(\d+)\/(activate|pause)$/, (q, m) => ctx.marketing.campaign(dir, { op: m[2], campaign_id: Number(m[1]), reason: 'Директор' }));
   R('POST', /^\/api\/marketing\/sync$/, () => ctx.marketing.sync());
+  const socialView = () => ({ networks: Object.entries(SOCIAL).map(([k, v]) => ({ key: k, ...v, right: socialRights(db)[k], connected: ctx.social.has(k) })) });
+  R('GET', /^\/api\/social$/, socialView);
+  R('POST', /^\/api\/social$/, (q, m, b) => {
+    if (!SOCIAL[b.network] || !['auto', 'approval', 'off'].includes(b.right)) throw Object.assign(new Error('network и right: auto | approval | off'), { code: 400 });
+    db.setSetting('social_rights', { ...db.setting('social_rights', {}), [b.network]: b.right });
+    db.audit('director:panel', 'social.rights', b);
+    db.feed('🔑', `Права агентов: «${SOCIAL[b.network].title}» — ${RIGHTS_RU[b.right]}`);
+    return socialView();
+  });
   R('GET', /^\/api\/radar$/, () => ({
     adoptions: db.all(`SELECT a.*, g.name proposer FROM adoptions a LEFT JOIN agents g ON g.id=a.proposed_by ORDER BY CASE a.status WHEN 'proposed' THEN 0 WHEN 'pilot_done' THEN 1 WHEN 'security_review' THEN 2 WHEN 'pilot' THEN 3 ELSE 4 END, a.id DESC LIMIT 100`).map((x) => ({ ...x, status_ru: ADOPTION_RU[x.status] })),
     items: db.all(`SELECT id,source,title,url,summary,signal,verdict,relevance,assessment,fetched_at FROM radar_items ORDER BY CASE verdict WHEN 'pilot' THEN 0 WHEN 'watch' THEN 1 WHEN NULL THEN 2 ELSE 3 END, COALESCE(relevance,0) DESC, id DESC LIMIT 150`),

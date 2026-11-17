@@ -16,7 +16,8 @@ import { payseraConfig } from './bank.js';
 import { applyRates } from './fx.js';
 import { radarConfig } from './radar.js';
 import { createMarketing } from './marketing.js';
-import { adsConfig } from './ads.js';
+import { adsConfig, socialPublisher } from './ads.js';
+import crypto from 'node:crypto';
 
 const log = {
   info: (...a) => console.log(new Date().toISOString(), '[info]', ...a),
@@ -33,7 +34,8 @@ export function createApp(cfg, opts = {}) {
   ctx.paysera = opts.paysera || payseraConfig();
   ctx.radarCfg = opts.radarCfg || radarConfig();
   ctx.adsCfg = opts.adsCfg || adsConfig();
-  ctx.executors = opts.executors || buildExecutors(cfg, ctx.fetch, { revolut: () => ctx.revolut, revolutCfg: ctx.revolutCfg, adsCfg: ctx.adsCfg });
+  ctx.executors = opts.executors || buildExecutors(cfg, ctx.fetch, { revolut: () => ctx.revolut, revolutCfg: ctx.revolutCfg, adsCfg: ctx.adsCfg, threadsToken: () => db.setting('threads_token') });
+  ctx.social = socialPublisher(ctx.adsCfg, ctx.fetch, { crypto, threadsToken: () => db.setting('threads_token') });
   ctx.actions = createActions(ctx);
   ctx.marketing = createMarketing(ctx, { adsCfg: ctx.adsCfg, platforms: opts.platforms });
   ctx.llm = createLLM(ctx);

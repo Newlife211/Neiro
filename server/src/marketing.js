@@ -55,6 +55,8 @@ export function createMarketing(ctx, opts = {}) {
     const channels = (input.channels || []).map((c) => ({ channel: normChannel(c.channel), budget: Number(c.budget) || 0, goal: String(c.goal || '').slice(0, 300) }))
       .filter((c) => CHANNELS[c.channel]);
     if (!channels.length || channels.length > 4) return { error: 'Нужно 1–4 канала из списка: ' + Object.keys(CHANNELS).join(', ') };
+    const noApi = channels.filter((c) => CHANNELS[c.channel].paid && !adapterFor(c.channel));
+    if (noApi.length) return { error: `Эти рекламные площадки агенты сейчас вести не могут (нет подключённого API): ${noApi.map((c) => CHANNELS[c.channel].title).join(', ')}. Подключены: ${Object.keys(CHANNELS).filter((k) => adapterFor(k)).join(', ') || 'ни одной'} — остальное через бесплатные каналы (соцсети, переписка, письма) или вопрос директору о подключении.` };
     const budget = Number(input.budget), days = Math.round(Number(input.days) || 14);
     if (!(budget > 0)) return { error: 'Нужен общий бюджет теста > 0' };
     if (days < 3 || days > 60) return { error: 'Срок теста — от 3 до 60 дней' };
@@ -94,7 +96,7 @@ export function createMarketing(ctx, opts = {}) {
 Распредели работу:
 1) Никита — тексты лендинга и 3–5 вариантов объявлений; Вера — креативы и посты; IT — лендинг (ui_front/ai_product через create_task).
 2) На лендинг поставить счётчик: <script src="${cfg.publicUrl}/t.js" data-test="${t.key}" defer></script>. Форма заявки — атрибут data-neiro="lead", кнопка оплаты Stripe отслеживается сама.
-3) Для каналов без рекламного API (переписка, сообщества, соцсети) — ссылки с метками через mk_link; цифры этих каналов — через mk_log.
+3) Бесплатные каналы ведёт команда сама: посты — propose_action(post_social), письма и переписка — продажи; ссылки с метками — mk_link, цифры — mk_log.
 4) Егор — кампании через mk_campaign (create → проверка → activate). Сервер не даст выйти за бюджет канала и теста.
 5) Продажи — переписка с тёплыми лидами.
 Порог успеха: ${JSON.stringify(t.success)}. Цифры в любой момент — mk_status(test_id=${id}).` });
@@ -149,26 +151,20 @@ export function createMarketing(ctx, opts = {}) {
       const name = `N#${t.id} ${String(input.name || channel).slice(0, 60)}`;
       const url = tagUrl(raw, channel, input.name || channel);
       const ad = adapterFor(channel);
+      if (!CHANNELS[channel].paid) return { error: `«${CHANNELS[channel].title}» — не рекламный кабинет: публикуй через propose_action(post_social), ссылки — mk_link, цифры — mk_log` };
+      if (!ad) return { error: `Кабинет «${CHANNELS[channel].title}» не подключён по API — агенты его не ведут. Спроси директора через ask_director, если канал нужен.` };
       const spec = { creatives: input.creatives || [], keywords: input.keywords || [], headlines: input.headlines || [], descriptions: input.descriptions || [], countries: input.countries || [], age_min: input.age_min, age_max: input.age_max, geo_target_ids: input.geo_target_ids || [], language_ids: input.language_ids || [] };
-      let extId = null, extra = {}, status = 'paused', note;
-      if (ad) {
-        if (channel === 'meta' && !spec.creatives.length) return { error: 'Для Meta нужны creatives: [{headline, text, description?, image_url?}] (без image_url берётся картинка лендинга)' };
-        if (channel === 'google' && (spec.headlines.length < 3 || spec.descriptions.length < 2 || !spec.keywords.length)) return { error: 'Для Google нужны keywords, не меньше 3 headlines (до 30 знаков) и 2 descriptions (до 90 знаков)' };
-        const accDaily = fromBase(cfg, daily, accCurrency[CHANNELS[channel].api]);
-        const out = await ad.createCampaign({ name, url, dailyBudgetMinor: Math.round(accDaily * 100), dailyBudgetMicros: Math.round(accDaily * 1e6), countries: spec.countries, ageMin: spec.age_min, ageMax: spec.age_max,
-          creatives: spec.creatives, keywords: spec.keywords, headlines: spec.headlines, descriptions: spec.descriptions, geoTargetIds: spec.geo_target_ids, languageIds: spec.language_ids,
-          endTime: new Date(ts(t.ends_at)).toISOString() });
-        extId = out.extId; extra = out.extra || {};
-        note = 'Кампания создана выключенной. Проверь объявления и включи: mk_campaign(op=activate).';
-      } else {
-        status = 'draft';
-        note = `Для «${CHANNELS[channel].title}» нет подключённого API: спецификация сохранена, кампанию запускает человек в кабинете площадки (директор отметит её включённой в пульте). Цифры канала вноси через mk_log.`;
-      }
+      if (channel === 'meta' && !spec.creatives.length) return { error: 'Для Meta нужны creatives: [{headline, text, description?, image_url?}] (без image_url берётся картинка лендинга)' };
+      if (channel === 'google' && (spec.headlines.length < 3 || spec.descriptions.length < 2 || !spec.keywords.length)) return { error: 'Для Google нужны keywords, не меньше 3 headlines (до 30 знаков) и 2 descriptions (до 90 знаков)' };
+      const accDaily = fromBase(cfg, daily, accCurrency[CHANNELS[channel].api]);
+      const out = await ad.createCampaign({ name, url, dailyBudgetMinor: Math.round(accDaily * 100), dailyBudgetMicros: Math.round(accDaily * 1e6), countries: spec.countries, ageMin: spec.age_min, ageMax: spec.age_max,
+        creatives: spec.creatives, keywords: spec.keywords, headlines: spec.headlines, descriptions: spec.descriptions, geoTargetIds: spec.geo_target_ids, languageIds: spec.language_ids,
+        endTime: new Date(ts(t.ends_at)).toISOString() });
+      const extId = out.extId, extra = out.extra || {}, status = 'paused', note = 'Кампания создана выключенной. Проверь объявления и включи: mk_campaign(op=activate).';
       const r = db.run(`INSERT INTO mk_campaigns(test_id,channel,ext_id,extra,name,url,daily_budget_base,status,spec,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)`,
         t.id, channel, extId, JSON.stringify(extra), name, url, daily, status, JSON.stringify(spec), actor.id);
       const cid = Number(r.lastInsertRowid);
-      db.feed('🎯', `${actor.name || 'Директор'}: кампания «${name}» (${CHANNELS[channel].title}, ${daily} ${cfg.baseCurrency}/день) — ${status === 'draft' ? 'ждёт ручного запуска' : 'создана выключенной'}`, isDirector ? null : actor.id);
-      if (status === 'draft') send(`🎯 Кампанию нужно запустить вручную (#${cid}): ${name}\nПлощадка: ${CHANNELS[channel].title}, ${daily} ${cfg.baseCurrency}/день\nСсылка с метками: ${url}\nСпецификация — в пульте, вкладка «Маркетинг». После запуска отметьте кампанию включённой.`);
+      db.feed('🎯', `${actor.name || 'Директор'}: кампания «${name}» (${CHANNELS[channel].title}, ${daily} ${cfg.baseCurrency}/день) создана выключенной`, isDirector ? null : actor.id);
       return { ok: true, campaign_id: cid, status, url, note };
     }
     const c = db.get('SELECT * FROM mk_campaigns WHERE id=?', input.campaign_id);
@@ -179,7 +175,6 @@ export function createMarketing(ctx, opts = {}) {
     if (op === 'activate') {
       if (!['approved', 'running'].includes(t.status)) return { error: `Тест в статусе «${TEST_RU[t.status]}» — включать нельзя` };
       if (db.setting('stopped', false)) return { error: 'Включён режим «СТОП» — реклама не включается' };
-      if (c.status === 'draft' && !isDirector) return { error: 'Кампанию без API включает человек вручную — директор отметит её в пульте' };
       const why = budgetCheck(t, c.channel, c.daily_budget_base, c.id);
       if (why) return { error: why };
       if (ad) await ad.setStatus(c.ext_id, true);
@@ -212,7 +207,6 @@ export function createMarketing(ctx, opts = {}) {
     catch (e) { ctx.log?.error('mk pause', e.message); send(`⚠️ Не удалось поставить на паузу «${c.name}»: ${e.message}. Выключите кампанию вручную в кабинете площадки!`); throw e; }
     db.run(`UPDATE mk_campaigns SET status='paused', stop_reason=?, updated_at=datetime('now') WHERE id=?`, reason, c.id);
     db.feed('⏸', `Реклама на паузе: «${c.name}» — ${reason}`, null, 'warn');
-    if (!c.ext_id) send(`⏸ Остановите вручную кампанию «${c.name}» (${CHANNELS[c.channel]?.title}): ${reason}`);
   }
 
   // Режим «СТОП» директора: вся включённая реклама — на паузу
@@ -482,7 +476,7 @@ var t=el.closest('[data-neiro]');if(t&&t.tagName!=='FORM')send(t.getAttribute('d
   function status(input = {}) {
     if (input.test_id) { const d = details(input.test_id); return d || { error: 'Нет такого теста' }; }
     return { tests: list().map((t) => ({ id: t.id, title: t.title, status: t.status_ru, project_id: t.project_id, spent: t.spent, budget: t.budget_base, day: t.day, days: t.days, leads: t.total.leads, purchases: t.total.purchases, cpl: t.total.cpl })),
-      platforms: { meta: platforms.meta.enabled, google: platforms.google.enabled }, channels: Object.fromEntries(Object.entries(CHANNELS).map(([k, v]) => [k, v.title + (v.api ? (platforms[v.api]?.enabled ? ' (API подключён)' : ' (API не подключён — вручную)') : ' (вручную)')])) };
+      platforms: { meta: platforms.meta.enabled, google: platforms.google.enabled }, channels: Object.fromEntries(Object.entries(CHANNELS).map(([k, v]) => [k, v.title + (v.paid ? (v.api && platforms[v.api]?.enabled ? ' (API подключён)' : ' (не подключён — не использовать)') : ' (без кабинета: посты, письма, переписка)')])) };
   }
 
   // ---------------- расписание ----------------

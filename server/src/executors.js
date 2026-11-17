@@ -1,10 +1,12 @@
 // Исполнители внешних действий. Каждый получает уже разрешённое политикой действие.
+import crypto from 'node:crypto';
 import { stripeClient, yookassaClient } from './payments.js';
-import { adsConfig, socialPublisher } from './ads.js';
+import { adsConfig, socialPublisher, SOCIAL } from './ads.js';
 
 export function buildExecutors(cfg, fetchImpl = fetch, extra = {}) {
   const stripe = stripeClient(cfg, fetchImpl), yk = yookassaClient(cfg, fetchImpl);
-  const social = socialPublisher(extra.adsCfg || adsConfig(), fetchImpl);
+  const adsC = extra.adsCfg || adsConfig();
+  const social = socialPublisher(adsC, fetchImpl, { crypto, threadsToken: extra.threadsToken });
 
   async function agentmail(method, path, body) {
     if (!cfg.agentmail.apiKey) throw new Error('AgentMail не настроен (AGENTMAIL_API_KEY)');
@@ -46,18 +48,18 @@ export function buildExecutors(cfg, fetchImpl = fetch, extra = {}) {
       const m = await telegram('sendMessage', { chat_id: chat, text: a.payload.text, disable_web_page_preview: false });
       return { result: { message_id: m.message_id } };
     },
-    // Соцсети проекта: Telegram-канал, Instagram, LinkedIn. Сообщества и форумы — всегда вручную, от имени человека.
+    // Соцсети: публикуют агенты от аккаунтов компании. Площадка и права проверены политикой.
     async post_social(a) {
       const p = a.payload, net = String(p.network || '').toLowerCase();
-      if (net === 'telegram') {
-        const chat = process.env.TELEGRAM_CHANNEL_ID;
-        if (!chat) return { status: 'manual', result: { note: 'Не задан TELEGRAM_CHANNEL_ID — опубликуйте пост вручную' } };
+      if (!SOCIAL[net]) throw new Error('Неизвестная площадка: ' + net);
+      if (!social.has(net)) return { status: 'manual', result: { note: `«${SOCIAL[net].title}» ещё не подключена: директору нужно завести аккаунт и положить ключи в .env (список — в «Задачах директора»). Текст поста сохранён в действии.` } };
+      if (net === 'telegram' || net === 'telegram_chat') {
+        const chat = net === 'telegram' ? adsC.telegramChannel : String(p.target || '');
+        if (net === 'telegram_chat' && !adsC.telegramChats.includes(chat)) throw new Error('Этого чата нет в списке разрешённых директором (TELEGRAM_COMMUNITY_CHATS)');
         const m = await telegram('sendMessage', { chat_id: chat, text: p.text, disable_web_page_preview: false });
         return { result: { network: net, message_id: m.message_id } };
       }
-      if ((net === 'instagram' || net === 'linkedin') && social.has(net)) return { result: { network: net, ...(await social[net]({ text: p.text, image_url: p.image_url })) } };
-      const why = net === 'community' ? 'Посты в сообществах и на форумах публикует человек от своего имени' : `Публикация в «${net || '?'}» через API не подключена`;
-      return { status: 'manual', result: { note: `${why}: скопируйте текст из пульта и опубликуйте.` } };
+      return { result: { network: net, ...(await social[net]({ text: p.text, image_url: p.image_url, link: p.link, title: p.title, target: p.target })) } };
     },
     async create_payment_link(a, { db }) {
       const p = a.payload, provider = p.provider || (a.currency === 'RUB' ? 'yookassa' : 'stripe');

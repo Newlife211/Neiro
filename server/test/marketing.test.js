@@ -6,7 +6,8 @@ import { adsConfig } from '../src/ads.js';
 import { reconcile } from '../src/bank.js';
 import { testConfig, fakeFetch } from './helpers.js';
 
-const META = { META_ACCESS_TOKEN: 'meta-t', META_AD_ACCOUNT_ID: 'act_1', META_PAGE_ID: 'page1', META_CURRENCY: 'EUR' };
+const G = { GOOGLE_ADS_DEVELOPER_TOKEN: 'd', GOOGLE_ADS_CLIENT_ID: 'c', GOOGLE_ADS_CLIENT_SECRET: 's', GOOGLE_ADS_REFRESH_TOKEN: 'r', GOOGLE_ADS_CUSTOMER_ID: '123-456-7890' };
+const META = { META_ACCESS_TOKEN: 'meta-t', META_AD_ACCOUNT_ID: 'act_1', META_PAGE_ID: 'page1', META_CURRENCY: 'EUR', ...G };
 
 function setup({ env = META, handlers = [], insights = [] } = {}) {
   const tg = [];
@@ -18,7 +19,8 @@ function setup({ env = META, handlers = [], insights = [] } = {}) {
     ['https://graph.facebook.com/v23.0/act_1/', () => ({ id: String(++n) })],
     ['https://graph.facebook.com/v23.0/', () => ({ success: true })],
   ]);
-  const app = createApp(testConfig({ publicUrl: 'https://neiro.example' }), { db: openDb(':memory:'), fetch: f, adsCfg: adsConfig(env), backoffScale: 0 });
+  const c = testConfig({ publicUrl: 'https://neiro.example' }); c.limits.outboundDaily = 40;
+  const app = createApp(c, { db: openDb(':memory:'), fetch: f, adsCfg: adsConfig(env), backoffScale: 0 });
   app.db.run('DELETE FROM tasks');
   const mk = { id: 'mk_head', name: 'Мария', dept: 'marketing' }, ads = { id: 'mk_ads', name: 'Егор', dept: 'marketing' };
   return { app, f, tg, mk, ads };
@@ -75,9 +77,9 @@ test('кампании: до одобрения нельзя; Meta создаё�
   await s.app.http.handler(...fakeReq('POST', '/api/control', { stopped: true }));
   assert.equal(s.app.db.get('SELECT status FROM mk_campaigns WHERE id=?', c.campaign_id).status, 'paused');
   assert.match((await s.app.marketing.campaign(s.ads, { op: 'activate', campaign_id: c.campaign_id })).error, /СТОП/);
-  // канал без API — черновик и сообщение директору
-  const d = await s.app.marketing.campaign(s.ads, { op: 'create', test_id: r.test_id, channel: 'outreach', daily_budget: 0.01 });
-  assert.equal(d.status, 'draft');
+  // бесплатный канал — не рекламный кабинет; платная площадка без API в план не попадает
+  assert.match((await s.app.marketing.campaign(s.ads, { op: 'create', test_id: r.test_id, channel: 'outreach', daily_budget: 0.01 })).error, /post_social/);
+  assert.match(s.app.marketing.proposeTest(s.mk, { ...PLAN, title: 'TikTok', channels: [{ channel: 'tiktok', budget: 50 }], budget: 50 }).error, /нет подключённого API/);
 });
 
 test('метки и счётчик: короткая ссылка, визиты без дублей, заявка, чужой ключ, оплата Stripe с привязкой к каналу', async () => {
@@ -148,8 +150,7 @@ test('отчёт: карточка директору с решениями; «�
 });
 
 test('Google Ads: кампания с бюджетом в микроединицах и статусом PAUSED, разбор статистики', async () => {
-  const G = { GOOGLE_ADS_DEVELOPER_TOKEN: 'd', GOOGLE_ADS_CLIENT_ID: 'c', GOOGLE_ADS_CLIENT_SECRET: 's', GOOGLE_ADS_REFRESH_TOKEN: 'r', GOOGLE_ADS_CUSTOMER_ID: '123-456-7890' };
-  const s = setup({ env: G, handlers: [
+  const s = setup({ handlers: [
     ['https://oauth2.googleapis.com/token', () => ({ access_token: 'at', expires_in: 3600 })],
     ['https://googleads.googleapis.com/v21/customers/1234567890/googleAds:mutate', () => ({ mutateOperationResponses: [{ campaignBudgetResult: { resourceName: 'customers/1234567890/campaignBudgets/9' } }, { campaignResult: { resourceName: 'customers/1234567890/campaigns/77' } }] })],
     ['https://googleads.googleapis.com/v21/customers/1234567890/googleAds:search', () => ({ results: [{ campaign: { id: '77' }, segments: { date: '2026-11-18' }, metrics: { impressions: '500', clicks: '40', costMicros: '12500000' } }] })],
@@ -164,15 +165,39 @@ test('Google Ads: кампания с бюджетом в микроединиц
   assert.deepEqual(rows[0], { extId: '77', day: '2026-11-18', impressions: 500, clicks: 40, spend: 12.5, currency: null });
 });
 
-test('посты в соцсети: Instagram в два шага, сообщество — вручную от имени человека', async () => {
-  const s = setup({ env: { IG_USER_ID: 'ig1', IG_ACCESS_TOKEN: 'igt' }, handlers: [
+test('соцсети: свои страницы агенты ведут сами, сообщества — по правам директора, не чаще раза в неделю в одно место', async () => {
+  const s = setup({ env: { IG_USER_ID: 'ig1', IG_ACCESS_TOKEN: 'igt', REDDIT_CLIENT_ID: 'rc', REDDIT_CLIENT_SECRET: 'rs', REDDIT_USERNAME: 'neiro', REDDIT_PASSWORD: 'pw', X_API_KEY: 'k', X_API_SECRET: 's', X_ACCESS_TOKEN: 't', X_ACCESS_SECRET: 'ts' }, handlers: [
     ['https://graph.facebook.com/v23.0/ig1/media_publish', () => ({ id: 'post9' })],
     ['https://graph.facebook.com/v23.0/ig1/media', () => ({ id: 'cont1' })],
+    ['https://www.reddit.com/api/v1/access_token', () => ({ access_token: 'rt', expires_in: 3600 })],
+    ['https://oauth.reddit.com/api/submit', () => ({ json: { errors: [], data: { name: 't3_x', url: 'https://reddit.com/r/SaaS/x' } } })],
+    ['https://api.x.com/2/tweets', () => ({ data: { id: '777' } })],
   ] });
   const a = await s.app.actions.propose({ kind: 'post_social', payload: { network: 'instagram', text: 'Запуск!', image_url: 'https://cv.example.com/og.jpg' }, agentId: 'mk_smm' });
   assert.equal(a.status, 'executed'); assert.equal(a.result.id, 'post9');
-  const b = await s.app.actions.propose({ kind: 'post_social', payload: { network: 'community', text: 'Привет, r/cscareerquestions' }, agentId: 'mk_smm' });
-  assert.equal(b.status, 'manual'); assert.match(b.result.note, /от своего имени/);
+  const x = await s.app.actions.propose({ kind: 'post_social', payload: { network: 'x', text: 'Привет' }, agentId: 'mk_smm' });
+  assert.equal(x.status, 'executed');
+  assert.match(s.f.calls.find((c) => c.url === 'https://api.x.com/2/tweets').init.headers.Authorization, /^OAuth oauth_consumer_key="k".*oauth_signature="/);
+  // Reddit по умолчанию — с одобрением; после «да» публикует агент
+  const r = await s.app.actions.propose({ kind: 'post_social', payload: { network: 'reddit', target: 'r/SaaS', title: 'Как мы проверили спрос за 200 €', text: 'Разбор' }, agentId: 'mk_smm' });
+  assert.equal(r.status, 'pending'); assert.match(r.policy_reason, /с одобрением/);
+  assert.equal((await s.app.actions.decide(r.id, true)).status, 'executed');
+  assert.equal(new URLSearchParams(s.f.calls.find((c) => c.url.endsWith('/api/submit')).body).get('sr'), 'SaaS');
+  // директор дал права «сами» — но в то же сообщество чаще раза в неделю всё равно только с его «да»
+  await call(s.app, 'POST', '/api/social', JSON.stringify({ network: 'reddit', right: 'auto' }), true);
+  const r2 = await s.app.actions.propose({ kind: 'post_social', payload: { network: 'reddit', target: 'SaaS', title: 'Ещё', text: 'Ещё' }, agentId: 'mk_smm' });
+  assert.equal(r2.status, 'pending'); assert.match(r2.policy_reason, /7 дней/);
+  const r3 = await s.app.actions.propose({ kind: 'post_social', payload: { network: 'reddit', target: 'startups', title: 'Ещё', text: 'Ещё' }, agentId: 'mk_smm' });
+  assert.equal(r3.status, 'executed');
+  // запрет и неподключённая площадка
+  await call(s.app, 'POST', '/api/social', JSON.stringify({ network: 'x', right: 'off' }), true);
+  assert.equal((await s.app.actions.propose({ kind: 'post_social', payload: { network: 'x', text: 'нельзя' }, agentId: 'mk_smm' })).status, 'denied');
+  const li = await s.app.actions.propose({ kind: 'post_social', payload: { network: 'linkedin', text: 'Пост' }, agentId: 'mk_smm' });
+  assert.equal(li.status, 'manual'); assert.match(li.result.note, /не подключена/);
+  assert.equal((await s.app.actions.propose({ kind: 'post_social', payload: { network: 'community', text: 'x' } })).status, 'denied');
+  const v = JSON.parse((await call(s.app, 'GET', '/api/social', '', true)).body);
+  assert.equal(v.networks.find((n) => n.key === 'reddit').right, 'auto');
+  assert.equal(v.networks.find((n) => n.key === 'instagram').connected, true);
 });
 
 // --- мелкие помощники для вызова HTTP-обработчика без сети ---
@@ -186,8 +211,8 @@ function mockPair(method, url, raw = '', headers = {}) {
   const res = { status: 0, headers: {}, body: '', writeHead(code, h) { this.status = code; Object.assign(this.headers, h || {}); }, end(b) { this.body = b ? String(b) : ''; this.done?.(); } };
   return { req, res };
 }
-async function call(app, method, url, raw = '') {
-  const { req, res } = mockPair(method, url, raw);
+async function call(app, method, url, raw = '', auth = false) {
+  const { req, res } = mockPair(method, url, raw, auth ? { authorization: 'Bearer test-director-token-0123456789' } : {});
   const done = new Promise((r) => { res.done = r; });
   await app.http.handler(req, res);
   await done;
