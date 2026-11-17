@@ -61,7 +61,7 @@ export function createActions(ctx) {
       });
       db.audit('system', 'action.' + st, { id, kind: a.kind });
       if (st === 'manual') { db.feed('🖐', `Нужно выполнить вручную: «${KINDS[a.kind].title}» (#${id}) — ${out.result?.note || ''}`, a.agent_id, 'warn'); emit('manual', get(id)); }
-      else db.feed('📤', `Выполнено: «${KINDS[a.kind].title}» (#${id})${a.amount_base ? ' · ' + round2(a.amount_base) + ' ' + cfg.baseCurrency : ''}`, a.agent_id, 'good');
+      else { emit('executed', get(id)); db.feed('📤', `Выполнено: «${KINDS[a.kind].title}» (#${id})${a.amount_base ? ' · ' + round2(a.amount_base) + ' ' + cfg.baseCurrency : ''}`, a.agent_id, 'good'); }
     } catch (e) {
       db.run(`UPDATE actions SET status='failed', error=?, executed_at=datetime('now') WHERE id=?`, String(e.message || e).slice(0, 1000), id);
       db.audit('system', 'action.failed', { id, error: String(e.message || e) });

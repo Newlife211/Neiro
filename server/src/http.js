@@ -109,6 +109,20 @@ export function createHttp(ctx) {
     db.feed('🔑', `Права агентов: «${SOCIAL[b.network].title}» — ${RIGHTS_RU[b.right]}`);
     return socialView();
   });
+  // ---- сопровождение проектов ----
+  R('GET', /^\/api\/support$/, () => ctx.support.overview());
+  R('POST', /^\/api\/support\/fate\/(\d+)$/, (q, m, b) => ctx.support.decideFate(Number(m[1]), b.decision, 'director:panel'));
+  R('POST', /^\/api\/support\/budget$/, (q, m, b) => {
+    const pid = Number(b.project_id), amount = Number(b.limit);
+    const p = db.get('SELECT * FROM projects WHERE id=?', pid);
+    if (!p || !(amount >= 0)) throw Object.assign(new Error('Нужны project_id и limit ≥ 0'), { code: 400 });
+    const all = db.setting('project_budgets', {});
+    all[pid] = { ...(all[pid] || {}), [b.stage || p.stage]: amount };
+    db.setSetting('project_budgets', all);
+    db.audit('director:panel', 'project.budget', b);
+    db.feed('💶', `Бюджет «${p.name}» на этапе ${b.stage || p.stage}: ${amount} ${cfg.baseCurrency}`);
+    return ctx.projectBudget(db.get('SELECT * FROM projects WHERE id=?', pid));
+  });
   R('GET', /^\/api\/radar$/, () => ({
     adoptions: db.all(`SELECT a.*, g.name proposer FROM adoptions a LEFT JOIN agents g ON g.id=a.proposed_by ORDER BY CASE a.status WHEN 'proposed' THEN 0 WHEN 'pilot_done' THEN 1 WHEN 'security_review' THEN 2 WHEN 'pilot' THEN 3 ELSE 4 END, a.id DESC LIMIT 100`).map((x) => ({ ...x, status_ru: ADOPTION_RU[x.status] })),
     items: db.all(`SELECT id,source,title,url,summary,signal,verdict,relevance,assessment,fetched_at FROM radar_items ORDER BY CASE verdict WHEN 'pilot' THEN 0 WHEN 'watch' THEN 1 WHEN NULL THEN 2 ELSE 3 END, COALESCE(relevance,0) DESC, id DESC LIMIT 150`),
@@ -125,7 +139,7 @@ export function createHttp(ctx) {
     db.setSetting('bank_polled_at', Date.now());
     return { added, ...rec, fx: !!fx };
   });
-  R('GET', /^\/api\/overview$/, () => ({ ...dailyMetrics(db, cfg), balances: balances(), questions_open: db.get(`SELECT COUNT(*) n FROM questions WHERE status='open'`).n, meetings_active: db.get(`SELECT COUNT(*) n FROM meetings WHERE status!='done'`).n, bank_unmatched: db.get(`SELECT COUNT(*) n FROM bank_tx WHERE status='unmatched'`).n, adoptions_waiting: db.get(`SELECT COUNT(*) n FROM adoptions WHERE status IN ('proposed','pilot_done')`).n, marketing_waiting: db.get(`SELECT COUNT(*) n FROM mk_tests WHERE status='proposed' OR (status='done' AND decision IS NULL)`).n, marketing_running: db.get(`SELECT COUNT(*) n FROM mk_tests WHERE status='running'`).n, paused: db.setting('paused', false), warnings: configWarnings(cfg), limits: cfg.limits, base: cfg.baseCurrency, telegram: !!ctx.telegram?.enabled }));
+  R('GET', /^\/api\/overview$/, () => ({ ...dailyMetrics(db, cfg), balances: balances(), questions_open: db.get(`SELECT COUNT(*) n FROM questions WHERE status='open'`).n, meetings_active: db.get(`SELECT COUNT(*) n FROM meetings WHERE status!='done'`).n, bank_unmatched: db.get(`SELECT COUNT(*) n FROM bank_tx WHERE status='unmatched'`).n, adoptions_waiting: db.get(`SELECT COUNT(*) n FROM adoptions WHERE status IN ('proposed','pilot_done')`).n, marketing_waiting: db.get(`SELECT COUNT(*) n FROM mk_tests WHERE status='proposed' OR (status='done' AND decision IS NULL)`).n, marketing_running: db.get(`SELECT COUNT(*) n FROM mk_tests WHERE status='running'`).n, support_waiting: db.get(`SELECT (SELECT COUNT(*) FROM fate WHERE proposal IS NOT NULL AND decision IS NULL) + (SELECT COUNT(*) FROM tickets WHERE first_response_at IS NULL AND status NOT IN ('solved','closed') AND first_due<=datetime('now')) + (SELECT COUNT(*) FROM bugs WHERE level='P0' AND status NOT IN ('fixed','wontfix')) n`).n, paused: db.setting('paused', false), warnings: configWarnings(cfg), limits: cfg.limits, base: cfg.baseCurrency, telegram: !!ctx.telegram?.enabled }));
   R('GET', /^\/api\/actions$/, (q) => db.all(`SELECT a.*, g.name agent_name FROM actions a LEFT JOIN agents g ON g.id=a.agent_id WHERE (?='' OR a.status=?) ORDER BY a.id DESC LIMIT 200`, q.status || '', q.status || '').map((a) => ({ ...a, payload: J(a.payload, {}), result: J(a.result) })));
   R('GET', /^\/api\/projects$/, () => db.all(`SELECT p.*, (SELECT COALESCE(SUM(amount_base),0) FROM ledger l WHERE l.project_id=p.id AND l.direction='in') revenue FROM projects p ORDER BY p.id DESC`));
   R('GET', /^\/api\/tasks$/, (q) => db.all(`SELECT t.id,t.title,t.status,t.dept,t.agent_id,g.name agent_name,t.priority,t.created_by,t.project_id,t.created_at,t.finished_at,substr(t.result,1,600) result,t.error FROM tasks t LEFT JOIN agents g ON g.id=t.agent_id WHERE (?='' OR t.status=?) ORDER BY t.id DESC LIMIT 200`, q.status || '', q.status || ''));
@@ -202,12 +216,37 @@ export function createHttp(ctx) {
         const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
         res.writeHead(ctx.marketing.track(body, ip).code, h); return res.end();
       }
+      // Сопровождение: форма «Написать нам», опросы, оценка ответа (публично, без токена)
+      if (p.startsWith('/support/') && (req.method === 'POST' || req.method === 'OPTIONS')) {
+        const h = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Cache-Control': 'no-store', 'Content-Type': 'application/json; charset=utf-8' };
+        if (req.method === 'OPTIONS') { res.writeHead(204, h); return res.end(); }
+        let body = {};
+        try { const raw = await readBody(req); if (raw.length > 8000) throw new Error('big'); body = (req.headers['content-type'] || '').includes('json') ? JSON.parse(raw || '{}') : Object.fromEntries(new URLSearchParams(raw)); } catch { res.writeHead(400, h); return res.end('{}'); }
+        const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+        const r = ctx.support.formSubmit(p.slice(9), body, ip);
+        res.writeHead(r.code, h); return res.end(JSON.stringify(r.code === 200 ? { ok: true, ticket: r.id } : { ok: false }));
+      }
+      if (p.startsWith('/s/')) {
+        const tok = p.slice(3);
+        if (req.method === 'POST') {
+          let body = {}; try { body = Object.fromEntries(new URLSearchParams(await readBody(req))); } catch {}
+          ctx.support.surveyAnswer(tok, body);
+        }
+        const page = ctx.support.surveyPage(tok);
+        return page ? send(res, 200, page, 'text/html; charset=utf-8') : send(res, 404, 'Не найдено', 'text/plain; charset=utf-8');
+      }
+      if (req.method === 'GET' && /^\/r\/[^/]+\/[01]$/.test(p)) {
+        const [, , tok, v] = p.split('/');
+        const ok = ctx.support.rate(tok, v === '1');
+        return send(res, ok ? 200 : 404, `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font:16px system-ui;padding:40px;max-width:520px;margin:auto">${ok ? (v === '1' ? 'Спасибо! Рады, что помогли.' : 'Спасибо за честность — мы разберёмся и ответим ещё раз.') : 'Ссылка устарела.'}</body>`, 'text/html; charset=utf-8');
+      }
       if (req.method === 'POST' && p === '/webhooks/stripe') {
         const raw = await readBody(req);
         if (!verifyStripeSignature(raw, req.headers['stripe-signature'], cfg.stripe.webhookSecret)) return send(res, 400, { error: 'bad signature' });
         const ev = JSON.parse(raw);
         const msg = handleStripeEvent(db, cfg, ev);
         try { ctx.marketing.attributeStripe(ev); } catch (e) { ctx.log?.error('mk attribution', e.message); }
+        ctx.support.onStripe(ev).catch((e) => ctx.log?.error('support stripe', e.message));
         db.audit('stripe', 'webhook', { id: ev.id, type: ev.type });
         if (msg) { db.feed('💰', msg, null, 'good'); ctx.notify?.(msg); }
         return send(res, 200, { received: true });

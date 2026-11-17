@@ -1,6 +1,6 @@
 // Рабочий цикл агента: берёт задачу, думает через Claude, пользуется инструментами, сдаёт результат.
 import { J } from './db.js';
-import { KINDS, llmBudgetOk, spentSoFar, round2 } from './policy.js';
+import { KINDS, llmBudgetOk, spentSoFar, round2, projectBudget } from './policy.js';
 import { radarList, radarAssess, proposeAdoption, adoptionUpdate, ADOPTION_RU } from './radar.js';
 import { readUrl } from './webread.js';
 import { askDirector } from './director.js';
@@ -19,7 +19,7 @@ const TOOLS = [
   { name: 'upsert_project', description: 'Создать проект (без project_id) или обновить его этап и данные. Перейти дальше этапа «decision» можно только после решения директора.',
     input_schema: { type: 'object', properties: { project_id: { type: 'integer' }, name: { type: 'string' }, stage: { type: 'string', enum: STAGES }, summary: { type: 'string' }, roi: { type: 'number' }, price: { type: 'number' }, currency: { type: 'string' } } } },
   { name: 'propose_action', description: 'Действие во внешнем мире: письмо, пост, ссылка на оплату, трата денег, возврат, деплой и др. Политика компании сама решит: выполнить сразу (в пределах лимитов) или отправить директору на подтверждение.',
-    input_schema: { type: 'object', properties: { kind: { type: 'string', enum: Object.keys(KINDS) }, payload: { type: 'object', description: 'send_email: {to:[..], subject, text}; reply_email: {message_id, text}; post_telegram: {text}; post_social: {network: "telegram"|"instagram"|"linkedin"|"community", text, image_url?, project_id?}; create_payment_link: {title, project_id, recurring?: "month"|"year", provider?: "stripe"|"yookassa", customer_email?}; spend: {vendor, purpose, category: "ads"|"services"|"tools"|"other", recurring?: bool, url?}; refund: {provider, payment_id}; deploy: {project, ref}; change_price/sign_contract/custom: {description}' }, amount: { type: 'number' }, currency: { type: 'string' } }, required: ['kind', 'payload'] } },
+    input_schema: { type: 'object', properties: { kind: { type: 'string', enum: Object.keys(KINDS) }, payload: { type: 'object', description: 'send_email: {to:[..], subject, text}; reply_email: {message_id, text}; post_telegram: {text}; post_social: {network: "telegram"|"instagram"|"linkedin"|"community", text, image_url?, project_id?}; create_payment_link: {title, project_id, recurring?: "month"|"year", provider?: "stripe"|"yookassa", customer_email?}; spend: {vendor, purpose, category: "ads"|"services"|"tools"|"other", project_id (обязательно, если трата на проект — учитывается бюджет этапа), recurring?: bool, url?}; refund: {provider, payment_id}; deploy: {project, ref}; change_price/sign_contract/custom: {description}' }, amount: { type: 'number' }, currency: { type: 'string' } }, required: ['kind', 'payload'] } },
   { name: 'remember', description: 'Запомнить важный факт для будущих задач.', input_schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
   { name: 'company_status', description: 'Цифры компании: деньги, лимиты, проекты, очередь задач.', input_schema: { type: 'object', properties: {} } },
   { name: 'ask_director', description: 'Задать вопрос директору, когда без его решения дальше нельзя (стратегия, деньги сверх полномочий, спорные ситуации). Не чаще 3 раз в день. Ответ придёт отдельной задачей — не жди его.',
@@ -63,6 +63,32 @@ export function marketingTools(agent) {
   if (agent.dept === 'analytics') return [MK.status, MK.log];
   return [];
 }
+// Сопровождение: обращения, ошибки, бэклог, релизы, база знаний, метрики и судьба проекта
+const SP = {
+  ticket_list: { name: 'ticket_list', description: 'Открытые обращения клиентов (или по статусу/проекту).', input_schema: { type: 'object', properties: { project_id: { type: 'integer' }, status: { type: 'string' } } } },
+  ticket_update: { name: 'ticket_update', description: 'Разобрать обращение: тип (задаёт срок ответа), тема, проект, статус.', input_schema: { type: 'object', properties: { ticket_id: { type: 'integer' }, kind: { type: 'string', enum: ['question', 'bug', 'feature', 'complaint', 'billing'] }, topic: { type: 'string', description: '2–4 слова, одинаково для похожих вопросов' }, project_id: { type: 'integer' }, status: { type: 'string', enum: ['open', 'waiting', 'solved', 'closed'] } }, required: ['ticket_id'] } },
+  ticket_reply: { name: 'ticket_reply', description: 'Ответить клиенту по обращению (письмом из твоего ящика). solved=true — вопрос решён, клиент получит ссылку «ответ помог?».', input_schema: { type: 'object', properties: { ticket_id: { type: 'integer' }, text: { type: 'string' }, solved: { type: 'boolean' } }, required: ['ticket_id', 'text'] } },
+  kb_search: { name: 'kb_search', description: 'База знаний поддержки: поиск по словам или статья целиком (article_id).', input_schema: { type: 'object', properties: { query: { type: 'string' }, project_id: { type: 'integer' }, article_id: { type: 'integer' } } } },
+  kb_write: { name: 'kb_write', description: 'Написать или обновить статью базы знаний.', input_schema: { type: 'object', properties: { article_id: { type: 'integer' }, project_id: { type: 'integer' }, title: { type: 'string' }, body: { type: 'string' }, topic: { type: 'string' } }, required: ['title', 'body'] } },
+  bug_report: { name: 'bug_report', description: 'Завести ошибку: P0 — авария (продукт не работает, не проходят оплаты, утечка данных), P1 — важная функция у части клиентов (24 ч), P2 — есть обходной путь (до 7 дней), P3 — мелочь.', input_schema: { type: 'object', properties: { project_id: { type: 'integer' }, title: { type: 'string' }, description: { type: 'string', description: 'Что сломалось, как повторить' }, level: { type: 'string', enum: ['P0', 'P1', 'P2', 'P3'] }, affected: { type: 'integer' }, ticket_id: { type: 'integer' } }, required: ['title', 'level'] } },
+  bug_update: { name: 'bug_update', description: 'Статус или уровень ошибки.', input_schema: { type: 'object', properties: { bug_id: { type: 'integer' }, status: { type: 'string', enum: ['open', 'fixing', 'testing', 'fixed', 'wontfix'] }, level: { type: 'string', enum: ['P0', 'P1', 'P2', 'P3'] }, note: { type: 'string' } }, required: ['bug_id'] } },
+  backlog_add: { name: 'backlog_add', description: 'Задача в бэклог проекта с оценкой RICE (охват за месяц × эффект 0.25–3 × уверенность 0.5–1 / трудоёмкость в днях). Дубль по названию увеличит счётчик просьб.', input_schema: { type: 'object', properties: { project_id: { type: 'integer' }, title: { type: 'string' }, description: { type: 'string' }, source: { type: 'string', enum: ['feedback', 'churn', 'support', 'analytics', 'radar', 'team'] }, reach: { type: 'number' }, impact: { type: 'number' }, confidence: { type: 'number' }, effort: { type: 'number' }, metric: { type: 'string', description: 'Какая метрика должна измениться' }, requests: { type: 'integer' }, ticket_id: { type: 'integer' } }, required: ['project_id', 'title'] } },
+  backlog_vote: { name: 'backlog_vote', description: 'Ещё один клиент просит эту задачу.', input_schema: { type: 'object', properties: { backlog_id: { type: 'integer' }, ticket_id: { type: 'integer' }, count: { type: 'integer' } }, required: ['backlog_id'] } },
+  backlog_list: { name: 'backlog_list', description: 'Бэклог проекта по приоритету RICE.', input_schema: { type: 'object', properties: { project_id: { type: 'integer' } }, required: ['project_id'] } },
+  backlog_update: { name: 'backlog_update', description: 'Переоценить задачу или сменить статус.', input_schema: { type: 'object', properties: { backlog_id: { type: 'integer' }, reach: { type: 'number' }, impact: { type: 'number' }, confidence: { type: 'number' }, effort: { type: 'number' }, status: { type: 'string', enum: ['new', 'planned', 'in_progress', 'done', 'rejected'] }, metric: { type: 'string' } }, required: ['backlog_id'] } },
+  release_plan: { name: 'release_plan', description: 'План релиза недели: задачи бэклога и ошибки. Директор получит его для сведения.', input_schema: { type: 'object', properties: { project_id: { type: 'integer' }, backlog_ids: { type: 'array', items: { type: 'integer' } }, bug_ids: { type: 'array', items: { type: 'integer' } }, notes: { type: 'string' } }, required: ['project_id'] } },
+  release_effect: { name: 'release_effect', description: 'Итог проверки эффекта релиза через неделю.', input_schema: { type: 'object', properties: { release_id: { type: 'integer' }, effect: { type: 'string' } }, required: ['release_id', 'effect'] } },
+  project_metrics: { name: 'project_metrics', description: 'Метрики проекта: выручка за 30 дней, новые клиенты, отток, стоимость клиента, расход на клиента, оценка, открытые ошибки, бюджет этапа.', input_schema: { type: 'object', properties: { project_id: { type: 'integer' } }, required: ['project_id'] } },
+  project_verdict: { name: 'project_verdict', description: 'Предложить директору судьбу проекта на контрольной точке 30/60/90 дней.', input_schema: { type: 'object', properties: { project_id: { type: 'integer' }, verdict: { type: 'string', enum: ['scale', 'hold', 'fix', 'close'] }, reasoning: { type: 'string' } }, required: ['project_id', 'verdict', 'reasoning'] } },
+};
+export function supportTools(agent) {
+  const pick = (...n) => n.map((k) => SP[k]);
+  if (agent.dept === 'support' || agent.dept === 'clients') return pick('ticket_list', 'ticket_update', 'ticket_reply', 'kb_search', 'kb_write', 'bug_report', 'backlog_add', 'backlog_vote');
+  if (['ai_product', 'it', 'quality'].includes(agent.dept)) return pick('ticket_list', 'bug_report', 'bug_update', 'backlog_add', 'backlog_vote', 'backlog_list', 'backlog_update', 'release_plan', 'release_effect', 'kb_search', 'kb_write', 'project_metrics');
+  if (agent.id === 'cdo') return pick('project_metrics', 'project_verdict', 'backlog_list');
+  if (agent.dept === 'analytics') return pick('project_metrics', 'backlog_list');
+  return [];
+}
 const RESEARCH_DEPTS = new Set(['tech_radar', 'rnd', 'security', 'analytics']);
 
 export function toolsFor(agent, opts = {}) {
@@ -71,6 +97,7 @@ export function toolsFor(agent, opts = {}) {
   if (agent.dept === 'tech_radar' || agent.id === 'cdo' || agent.id === 'rnd_head') t.push(...RADAR_TOOLS);
   t.push(ADOPTION_TOOL);
   t.push(...marketingTools(agent));
+  t.push(...supportTools(agent));
   if (research) { t.push(READ_URL); if (opts.webSearch !== false) t.push(WEB_SEARCH); }
   return t;
 }
@@ -163,7 +190,7 @@ ${mem ? '\nТвоя память:\n' + mem : ''}
         if (input.stage && !STAGES.includes(input.stage)) return { error: 'Неизвестный этап' };
         if (!input.project_id) {
           if (!input.name) return { error: 'Нужно название проекта' };
-          const r = db.run('INSERT INTO projects(name,stage,owner,summary,roi,price,currency) VALUES(?,?,?,?,?,?,?)', input.name, 'idea', a.id, input.summary || '', input.roi ?? null, input.price ?? null, input.currency || null);
+          const r = db.run(`INSERT INTO projects(name,stage,owner,summary,roi,price,currency,stage_since) VALUES(?,?,?,?,?,?,?,datetime('now'))`, input.name, 'idea', a.id, input.summary || '', input.roi ?? null, input.price ?? null, input.currency || null);
           db.feed('💡', `${a.name}: новый проект «${input.name}»`, a.id, 'good');
           return { ok: true, project_id: Number(r.lastInsertRowid) };
         }
@@ -174,8 +201,9 @@ ${mem ? '\nТвоя память:\n' + mem : ''}
         if (STAGES.indexOf(stage) > gate && STAGES.indexOf(p.stage) <= gate && !db.setting('approved_project_' + p.id, false)) {
           stage = 'decision'; note = 'Проект ждёт решения директора — дальше этапа «Решение» без одобрения нельзя';
         }
-        db.run(`UPDATE projects SET name=?, stage=?, summary=?, roi=?, price=?, currency=?, updated_at=datetime('now') WHERE id=?`,
-          input.name || p.name, stage, input.summary ?? p.summary, input.roi ?? p.roi, input.price ?? p.price, input.currency ?? p.currency, p.id);
+        db.run(`UPDATE projects SET name=?, stage=?, summary=?, roi=?, price=?, currency=?, updated_at=datetime('now'), stage_since=CASE WHEN stage!=? THEN datetime('now') ELSE stage_since END WHERE id=?`,
+          input.name || p.name, stage, input.summary ?? p.summary, input.roi ?? p.roi, input.price ?? p.price, input.currency ?? p.currency, stage, p.id);
+        if (stage === 'launch' && !db.setting('launched_' + p.id)) db.setSetting('launched_' + p.id, new Date().toISOString().slice(0, 19).replace('T', ' '));
         if (stage !== p.stage) db.feed(stage === 'decision' ? '📨' : '➡️', `Проект «${input.name || p.name}»: ${STAGE_RU[p.stage]} → ${STAGE_RU[stage]}${stage === 'decision' ? ' (ждёт директора)' : ''}`, a.id, stage === 'decision' ? 'warn' : 'info');
         if (stage === 'decision' && p.stage !== 'decision') ctx.notify?.(`📨 Проект «${input.name || p.name}» ждёт вашего решения.\nROI: ${input.roi ?? p.roi ?? '—'}%\n${(input.summary ?? p.summary ?? '').slice(0, 600)}`, { project: p.id });
         return { ok: true, stage, note };
@@ -200,6 +228,16 @@ ${mem ? '\nТвоя память:\n' + mem : ''}
       case 'mk_link': return ctx.marketing.link(a, input);
       case 'mk_log': return ctx.marketing.logMetrics(a, input);
       case 'mk_report': return marketingTools(a).some((x) => x.name === 'mk_report') ? ctx.marketing.report(a, input) : { error: 'Отчёт сдаёт маркетинг' };
+      case 'ticket_list': case 'ticket_update': case 'ticket_reply': case 'kb_search': case 'kb_write': case 'bug_report': case 'bug_update':
+      case 'backlog_add': case 'backlog_vote': case 'backlog_list': case 'backlog_update': case 'release_plan': case 'release_effect': case 'project_metrics': case 'project_verdict': {
+        if (!supportTools(a).some((x) => x.name === nameT)) return { error: 'Этот инструмент не для твоей роли' };
+        const S = ctx.support;
+        const map = { ticket_list: () => S.ticketList(input), ticket_update: () => S.ticketUpdate(a, input), ticket_reply: () => S.ticketReply(a, { ...input, task_id: task.id }), kb_search: () => S.kbSearch(input), kb_write: () => S.kbWrite(a, input),
+          bug_report: () => S.bugReport(a, { project_id: task.project_id, ...input }), bug_update: () => S.bugUpdate(a, input), backlog_add: () => S.backlogAdd(a, input), backlog_vote: () => S.backlogVote(a, input), backlog_list: () => S.backlogList(input),
+          backlog_update: () => S.backlogUpdate(a, input), release_plan: () => S.releasePlan(a, input), release_effect: () => S.releaseEffect(a, input), project_verdict: () => S.proposeFate(a, input),
+          project_metrics: () => { const p = db.get('SELECT * FROM projects WHERE id=?', input.project_id); return p ? { project: p.name, stage: p.stage, ...S.metrics(p.id), budget: projectBudget(db, p) } : { error: 'Нет такого проекта' }; } };
+        return map[nameT]();
+      }
       case 'read_url': return readUrl(input.url, { fetchImpl: ctx.fetch || fetch, lookup: ctx.dnsLookup });
       default:
         return { error: 'Неизвестный инструмент' };

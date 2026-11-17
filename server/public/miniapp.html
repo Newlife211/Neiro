@@ -124,6 +124,14 @@ pre{white-space:pre-wrap;font:13px/1.5 -apple-system,system-ui,sans-serif;margin
       <text class="lbl" x="35" y="120">Команда</text>
     </g>
 
+    <!-- спасательный круг на стене: сопровождение проектов -->
+    <g class="obj" data-go="support">
+      <circle cx="35" cy="172" r="21" fill="#e9e4da"/><circle cx="35" cy="172" r="10" fill="#222b38"/>
+      <g fill="#d94a3d"><path d="M35 151 a21 21 0 0 1 14.8 6.2 l-7.1 7.1 a11 11 0 0 0 -7.7 -3.3 z"/><path d="M56 172 a21 21 0 0 1 -6.2 14.8 l-7.1 -7.1 a11 11 0 0 0 3.3 -7.7 z"/><path d="M35 193 a21 21 0 0 1 -14.8 -6.2 l7.1 -7.1 a11 11 0 0 0 7.7 3.3 z"/><path d="M14 172 a21 21 0 0 1 6.2 -14.8 l7.1 7.1 a11 11 0 0 0 -3.3 7.7 z"/></g>
+      <g class="badge" id="b-support" display="none"><circle cx="54" cy="153" r="8" fill="#ff5a5a"/><text id="t-support" x="54" y="156.5" font-size="8.5" font-weight="700" fill="#fff" text-anchor="middle">0</text></g>
+      <text class="lbl" x="35" y="208">Сопровождение</text>
+    </g>
+
     <!-- график на стене: маркетинг -->
     <g class="obj" data-go="marketing" transform="translate(-76,-96)">
       <rect x="340" y="40" width="50" height="66" rx="3" fill="#1d2430" stroke="#3d2e1d" stroke-width="3"/>
@@ -359,7 +367,7 @@ async function refresh() {
   $('#mRev').textContent = money(ov.revenue_month); $('#mExp').textContent = money(ov.expenses_month);
   $('#mTasks').textContent = `${ov.tasks_done_24h} готово`; $('#mPend').textContent = `${dec} решений`;
   $('#mLine').textContent = ov.stopped ? '🛑 СТОП: внешние действия остановлены' : `траты сегодня ${ov.spend_limits.spent_today} из ${ov.spend_limits.day} ${ov.base}`;
-  badge('decisions', dec); badge('questions', ov.questions_open || 0); badge('tech', ov.adoptions_waiting || 0); badge('money', ov.bank_unmatched || 0); badge('marketing', ov.marketing_waiting || 0);
+  badge('decisions', dec); badge('questions', ov.questions_open || 0); badge('tech', ov.adoptions_waiting || 0); badge('money', ov.bank_unmatched || 0); badge('marketing', ov.marketing_waiting || 0); badge('support', ov.support_waiting || 0);
   document.getElementById('b-meetings').setAttribute('display', ov.meetings_active ? 'inline' : 'none');
   const q = ov.questions_open || 0;
   $('#phoneScreen').setAttribute('fill', q ? '#1d3b5c' : '#141a22');
@@ -372,7 +380,7 @@ async function refresh() {
 }
 
 // ---------- шторка ----------
-const TITLES = { overview: '🖥 Обзор компании', decisions: '📥 Решения', questions: '💬 Вопросы команды', order: '✍️ Поручение', meetings: '📣 Совещания', docs: '📁 Документы', tech: '🛰 Технологии', marketing: '📣 Маркетинг', money: '🧮 Деньги', team: '👥 Команда' };
+const TITLES = { overview: '🖥 Обзор компании', decisions: '📥 Решения', questions: '💬 Вопросы команды', order: '✍️ Поручение', meetings: '📣 Совещания', docs: '📁 Документы', tech: '🛰 Технологии', marketing: '📣 Маркетинг', support: '🛟 Сопровождение', money: '🧮 Деньги', team: '👥 Команда' };
 async function openSheet(key, silent) {
   if (key === 'stop') return toggleStop();
   if (!silent) haptic();
@@ -472,6 +480,17 @@ const V = {
       <div class="k" style="margin:12px 0 6px">🔑 Права агентов в соцсетях</div>
       ${so.networks.map((n) => `<div class="card"><div class="row"><b>${esc(n.title)}</b><span class="sp2"></span><span class="st ${n.connected ? 'g' : 'w'}">${n.connected ? 'подключена' : 'нет ключей'}</span></div><select style="margin-top:8px" onchange="setRight('${n.key}', this.value)">${[['auto', 'публикуют сами'], ['approval', 'с моим одобрением'], ['off', 'запрещено']].map(([v, t]) => `<option value="${v}"${n.right === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>`).join('')}`;
   },
+  async support() {
+    const r = await api('/api/support'); const f = (v) => (v == null ? '—' : v);
+    const FR = { scale: '🚀 Масштабировать', hold: '⏸ Держать', fix: '🔧 Чинить', close: '✖ Закрыть' };
+    return `<div class="grid2"><div class="card"><div class="k">Обращений</div><div class="v">${r.stats.open}</div><div class="note">просрочено ${r.stats.overdue}</div></div><div class="card"><div class="k">Ошибки P0–P1</div><div class="v" style="color:${r.stats.p01 ? 'var(--r)' : 'inherit'}">${r.stats.p01}</div></div></div>
+      ${r.projects.map((p) => `<div class="card"><div class="row"><b>${esc(p.name)}</b><span class="sp2"></span><span class="st b">${esc(STAGE[p.stage] || p.stage)}</span></div>
+        ${p.metrics ? `<div class="note" style="margin-top:4px">выручка 30 дн. ${money(p.metrics.mrr)} · новых за неделю ${p.metrics.new_customers_week} · отток ${f(p.metrics.churn_pct)}% · оценка ${f(p.metrics.score)}</div>` : ''}
+        ${p.budget ? `<div class="note">бюджет этапа: ${p.budget.spent} из ${p.budget.limit} ${ov.base}</div>` : ''}
+        ${p.fate ? `<div class="note" style="margin-top:6px"><b>Судьба (${p.fate.checkpoint} дн.):</b> предлагают «${FR[p.fate.proposal]}» — ${esc(p.fate.reasoning.slice(0, 300))}</div><div class="row" style="margin-top:6px">${Object.entries(FR).map(([k, t]) => `<button class="btn ${k === p.fate.proposal ? 'ok' : ''}" onclick="fateDec(${p.fate.id},'${k}')">${t}</button>`).join('')}</div>` : ''}</div>`).join('') || '<p class="note">Запущенных проектов пока нет.</p>'}
+      ${r.bugs.filter((b) => b.level <= 'P1').map((b) => `<div class="card"><div class="row"><span class="st r">${esc(b.level)}</span><b>${esc(b.title)}</b></div><div class="note">${esc(b.project || '')} · ${esc(b.status)} · затронуто ${b.affected}</div></div>`).join('')}
+      ${r.tickets.filter((t) => t.overdue).map((t) => `<div class="card"><div class="row"><span class="st r">просрочено</span><b>${esc(t.subject || '')}</b></div><div class="note">${esc(t.customer || '')} · ${esc(t.kind_ru)}</div></div>`).join('')}`;
+  },
   async money() {
     const [b, l] = await Promise.all([api('/api/bank'), api('/api/ledger')]);
     return `<div class="grid2"><div class="card"><div class="k">Выручка, месяц</div><div class="v" style="color:var(--g)">${money(ov.revenue_month)}</div></div><div class="card"><div class="k">Расходы, месяц</div><div class="v">${money(ov.expenses_month)}</div></div></div>
@@ -486,6 +505,7 @@ const V = {
 };
 
 async function mkDec(id, a) { if (a !== 'reject' && !(await confirmBox(a === 'approve' ? 'Одобрить бюджет теста?' : 'Остановить тест и его рекламу?'))) return; haptic('medium'); await post(`/api/marketing/tests/${id}/${a}`); toast('Готово'); openSheet('marketing', true); refresh(); }
+async function fateDec(id, d) { if (!(await confirmBox('Решение по проекту принято?'))) return; haptic('medium'); await post('/api/support/fate/' + id, { decision: d }); toast('Решение принято'); openSheet('support', true); refresh(); }
 async function setRight(n, r) { haptic(); await post('/api/social', { network: n, right: r }); toast('Права обновлены'); }
 async function mkV(id, v) { haptic('medium'); await post(`/api/marketing/tests/${id}/verdict`, { verdict: v }); toast('Решение принято'); openSheet('marketing', true); refresh(); }
 async function openDoc(id) { haptic(); const d = await api('/api/documents/' + id); current = null; $('#sh-title').textContent = '📄 ' + d.title; $('#sh-body').innerHTML = `<div class="card"><pre>${esc(d.content)}</pre></div>`; }

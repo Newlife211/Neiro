@@ -81,6 +81,33 @@ CREATE TABLE IF NOT EXISTS mk_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), test_id INTEGER NOT NULL, event TEXT NOT NULL, channel TEXT, medium TEXT, campaign TEXT, content TEXT,
   visitor TEXT, value REAL, currency TEXT, value_base REAL, dk TEXT, UNIQUE(test_id, dk));
 CREATE INDEX IF NOT EXISTS mk_events_t ON mk_events(test_id, event);
+CREATE TABLE IF NOT EXISTS tickets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, channel TEXT NOT NULL, customer TEXT, subject TEXT, body TEXT, message_id TEXT, inbox_agent TEXT,
+  kind TEXT NOT NULL DEFAULT 'new', topic TEXT, status TEXT NOT NULL DEFAULT 'new', assignee TEXT, bug_id INTEGER, backlog_id INTEGER, rating INTEGER,
+  first_due TEXT, first_response_at TEXT, overdue_alerted INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), solved_at TEXT);
+CREATE INDEX IF NOT EXISTS tickets_status ON tickets(status);
+CREATE TABLE IF NOT EXISTS bugs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, title TEXT NOT NULL, description TEXT, level TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open',
+  affected INTEGER DEFAULT 1, reported_by TEXT, fix_due TEXT, overdue_alerted INTEGER DEFAULT 0, release_id INTEGER, postmortem_task INTEGER, note TEXT,
+  created_at TEXT DEFAULT (datetime('now')), fixed_at TEXT);
+CREATE TABLE IF NOT EXISTS backlog (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, title TEXT NOT NULL, description TEXT, source TEXT, reach REAL DEFAULT 0, impact REAL DEFAULT 1,
+  confidence REAL DEFAULT 0.8, effort REAL DEFAULT 1, rice REAL DEFAULT 0, requests INTEGER DEFAULT 0, metric TEXT, status TEXT NOT NULL DEFAULT 'new',
+  release_id INTEGER, created_by TEXT, created_at TEXT DEFAULT (datetime('now')), done_at TEXT);
+CREATE TABLE IF NOT EXISTS releases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, week TEXT NOT NULL, notes TEXT, status TEXT NOT NULL DEFAULT 'planned',
+  planned_by TEXT, effect TEXT, created_at TEXT DEFAULT (datetime('now')), released_at TEXT, effect_at TEXT, UNIQUE(project_id, week));
+CREATE TABLE IF NOT EXISTS surveys (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, customer TEXT NOT NULL, kind TEXT NOT NULL, score INTEGER, answer TEXT, reason TEXT,
+  sent_at TEXT, answered_at TEXT, created_at TEXT DEFAULT (datetime('now')), UNIQUE(project_id, customer, kind));
+CREATE TABLE IF NOT EXISTS project_metrics (
+  project_id INTEGER NOT NULL, week TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')), PRIMARY KEY(project_id, week));
+CREATE TABLE IF NOT EXISTS fate (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, checkpoint INTEGER NOT NULL, proposal TEXT, reasoning TEXT, proposed_by TEXT,
+  decision TEXT, decided_at TEXT, created_at TEXT DEFAULT (datetime('now')), UNIQUE(project_id, checkpoint));
+CREATE TABLE IF NOT EXISTS kb_articles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, title TEXT NOT NULL, body TEXT NOT NULL, topic TEXT, uses INTEGER DEFAULT 0, created_by TEXT,
+  created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), actor TEXT, event TEXT, data TEXT);
 `;
 
@@ -89,6 +116,7 @@ export function openDb(file) {
   const raw = new DatabaseSync(file);
   raw.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
   raw.exec(SCHEMA);
+  try { raw.exec('ALTER TABLE projects ADD COLUMN stage_since TEXT'); } catch {} // миграция для старых баз
   const cache = new Map();
   const st = (sql) => { let s = cache.get(sql); if (!s) { s = raw.prepare(sql); cache.set(sql, s); } return s; };
   const db = {

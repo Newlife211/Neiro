@@ -16,6 +16,8 @@ import { payseraConfig } from './bank.js';
 import { applyRates } from './fx.js';
 import { radarConfig } from './radar.js';
 import { createMarketing } from './marketing.js';
+import { createSupport } from './support.js';
+import { projectBudget } from './policy.js';
 import { adsConfig, socialPublisher } from './ads.js';
 import crypto from 'node:crypto';
 
@@ -38,12 +40,15 @@ export function createApp(cfg, opts = {}) {
   ctx.social = socialPublisher(ctx.adsCfg, ctx.fetch, { crypto, threadsToken: () => db.setting('threads_token') });
   ctx.actions = createActions(ctx);
   ctx.marketing = createMarketing(ctx, { adsCfg: ctx.adsCfg, platforms: opts.platforms });
+  ctx.support = createSupport(ctx);
+  ctx.projectBudget = (p) => projectBudget(db, p);
   ctx.llm = createLLM(ctx);
   ctx.runtime = createAgentRuntime(ctx);
   ctx.telegram = createTelegram(ctx);
   ctx.notify = (text, o) => ctx.telegram.notify(text, o);
   ctx.actions.on((ev, a) => {
     if (ev === 'pending') ctx.telegram.notifyAction(a);
+    if (ev === 'executed') { try { ctx.support.onActionExecuted(a); } catch (e) { log.error('support hook', e.message); } }
     if (ev === 'manual') ctx.notify(`🖐 Нужно выполнить вручную (#${a.id}): ${a.kind} ${a.amount ? a.amount + ' ' + a.currency : ''}\n${a.result?.note || ''}\nПосле выполнения отметьте в пульте.`);
     if (ev === 'failed') ctx.notify(`⚠️ Действие #${a.id} (${a.kind}) не выполнено: ${a.error}`);
     // сообщаем агенту о решении директора, чтобы он продолжил работу

@@ -7,6 +7,7 @@ import { decideAdoption, ADOPTION_RU } from './radar.js';
 import { answerQuestion, giveOrder, createMeeting } from './director.js';
 import { J } from './db.js';
 import { TEST_RU, VERDICT_RU } from './marketing.js';
+import { FATE_RU } from './support.js';
 
 const HELP = `Я — связь с вашей компанией.
 
@@ -20,6 +21,7 @@ const HELP = `Я — связь с вашей компанией.
 /questions — вопросы сотрудников
 /meeting повестка — созвать совещание руководителей
 /marketing — тесты спроса и реклама
+/support — обращения, ошибки, метрики проектов
 /feed all|important|off — сколько событий присылать
 /stop — СТОП всех внешних действий
 /resume — снять СТОП`;
@@ -96,6 +98,7 @@ export function createTelegram(ctx) {
         if (type === 't') { const r = decideAdoption(ctx, Number(id), val === 'y', 'director:telegram'); msg = `«${r.title}»: ${ADOPTION_RU[r.status]}`; }
         if (type === 'm') { const r = ctx.marketing.decideTest(Number(id), val === 'y', 'director:telegram'); msg = `Тест «${r.title}»: ${TEST_RU[r.status]}`; }
         if (type === 'v') { const r = ctx.marketing.decideVerdict(Number(id), val, 'director:telegram'); msg = `Тест «${r.title}»: ${VERDICT_RU[r.decision] || r.decision}`; }
+        if (type === 'f') { const r = ctx.support.decideFate(Number(id), val, 'director:telegram'); msg = `Судьба проекта: ${FATE_RU[r.decision] || r.decision}`; }
         if (type === 'q') {
           const q = db.get('SELECT options FROM questions WHERE id=?', Number(id));
           const opt = J(q?.options, [])[Number(val)];
@@ -150,6 +153,11 @@ export function createTelegram(ctx) {
         if (!ts.length) return send('📣 Активных тестов спроса нет.');
         return send('📣 Тесты спроса\n\n' + ts.map((t) => `#${t.id} ${t.title}${t.project ? ` (${t.project})` : ''}\n${TEST_RU[t.status]}${t.status === 'running' ? ` · день ${t.day}/${t.days}` : ''} · потрачено ${t.spent}/${t.budget_base} ${cfg.baseCurrency} · заявок ${t.total.leads} · покупок ${t.total.purchases}${t.total.cpl != null ? ` · заявка ${t.total.cpl}` : ''}`).join('\n\n'));
       }
+      case '/support': {
+        const o = ctx.support.overview();
+        const ps = o.projects.filter((p) => p.metrics).map((p) => `«${p.name}»: выручка 30 дн. ${p.metrics.mrr} ${cfg.baseCurrency}, отток ${p.metrics.churn_pct ?? '—'}%, оценка ${p.metrics.score ?? '—'}`);
+        return send(`🛟 Сопровождение\nОбращений открыто: ${o.stats.open}, просрочено: ${o.stats.overdue}\nОшибок P0–P1: ${o.stats.p01}\nЖдут решения о судьбе: ${o.stats.fate_waiting}${ps.length ? '\n\n' + ps.join('\n') : ''}`);
+      }
       case '/feed': {
         const lvl = ['all', 'important', 'off'].includes(rest[0]) ? rest[0] : null;
         if (!lvl) return send(`Сейчас: ${db.setting('tg_feed', 'important')}.\n/feed all — вся лента пачками\n/feed important — только важное\n/feed off — только решения`);
@@ -173,7 +181,7 @@ export function createTelegram(ctx) {
     await api('setMyCommands', { commands: [
       { command: 'cabinet', description: 'Кабинет директора' }, { command: 'status', description: 'Цифры компании' },
       { command: 'approvals', description: 'Что ждёт решения' }, { command: 'questions', description: 'Вопросы сотрудников' },
-      { command: 'meeting', description: 'Созвать совещание' }, { command: 'marketing', description: 'Тесты спроса и реклама' }, { command: 'feed', description: 'Лента событий' },
+      { command: 'meeting', description: 'Созвать совещание' }, { command: 'marketing', description: 'Тесты спроса и реклама' }, { command: 'support', description: 'Сопровождение проектов' }, { command: 'feed', description: 'Лента событий' },
       { command: 'stop', description: 'СТОП внешних действий' }, { command: 'resume', description: 'Снять СТОП' },
     ] }).catch(() => {});
     if (cabinetUrl) await api('setChatMenuButton', { chat_id: Number(cfg.telegram.directorChatId), menu_button: { type: 'web_app', text: 'Кабинет', web_app: { url: cabinetUrl } } }).catch(() => {});

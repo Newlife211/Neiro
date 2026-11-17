@@ -103,9 +103,27 @@ export function evaluate(db, cfg, action) {
     if (s.day + amountBase > L.daily) return { decision: 'approval', reason: `Превысит дневной лимит: ${round2(s.day)} + ${amountBase} > ${L.daily} ${cfg.baseCurrency}`, amountBase };
     if (s.month + amountBase > L.monthly) return { decision: 'approval', reason: `Превысит месячный лимит: ${round2(s.month)} + ${amountBase} > ${L.monthly} ${cfg.baseCurrency}`, amountBase };
     if (p.recurring) return { decision: 'approval', reason: 'Подписка/регулярный платёж — только с подтверждением', amountBase };
+    if (p.project_id) {
+      const b = projectBudget(db, db.get('SELECT * FROM projects WHERE id=?', p.project_id));
+      if (b && b.spent + amountBase > b.limit + 0.001) return { decision: 'approval', reason: `Превысит бюджет проекта на этапе «${b.stage_ru}»: ${b.spent} + ${amountBase} > ${b.limit} ${cfg.baseCurrency}`, amountBase };
+    }
     return { decision: 'auto', reason: `В пределах лимитов (день ${round2(s.day + amountBase)}/${L.daily}, месяц ${round2(s.month + amountBase)}/${L.monthly} ${cfg.baseCurrency})`, amountBase };
   }
   return { decision: 'approval', reason: 'Требует решения директора', amountBase: 0 };
+}
+
+// Бюджет проекта по этапам (без рекламы — у неё свой бюджет теста, одобренный директором).
+// Стартовые суммы из документа процесса; директор меняет их в пульте («Сопровождение»).
+export const STAGE_BUDGET = { idea: 0, analysis: 100, decision: 100, build: 150, test: 150, launch: 300, revenue: null, closed: 0 };
+export const STAGE_BUDGET_RU = { idea: 'идея', analysis: 'проверка спроса', decision: 'проверка спроса', build: 'MVP', test: 'MVP', launch: 'первый месяц после запуска', revenue: 'рост (30% выручки за 30 дней)', closed: 'закрыт' };
+export function projectBudget(db, p) {
+  if (!p) return null;
+  const override = db.setting('project_budgets', {})[p.id]?.[p.stage];
+  let limit = override ?? STAGE_BUDGET[p.stage];
+  if (limit == null) limit = round2(0.3 * db.get(`SELECT COALESCE(SUM(amount_base),0) s FROM ledger WHERE direction='in' AND project_id=? AND ts>=datetime('now','-30 days')`, p.id).s);
+  const since = p.stage_since || p.created_at;
+  const spent = round2(db.get(`SELECT COALESCE(SUM(amount_base),0) s FROM actions WHERE kind='spend' AND status IN ('auto','approved','executed','manual') AND json_extract(payload,'$.project_id')=? AND created_at>=?`, p.id, since).s);
+  return { stage: p.stage, stage_ru: STAGE_BUDGET_RU[p.stage], limit, spent, left: round2(limit - spent), since };
 }
 
 export function llmBudgetOk(db, cfg) {
