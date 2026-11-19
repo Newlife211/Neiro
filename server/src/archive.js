@@ -14,13 +14,17 @@ export function importSimulator(db, payload, by = 'director') {
   const stamp = data.savedAt || `day-${S.day}`;
   if (db.setting('sim_import_' + stamp)) return { ok: true, skipped: true, note: 'Этот архив уже импортирован' };
   const res = { projects: 0, documents: 0, skipped_projects: 0 };
+  // В симуляторе одна идея запускается много раз («… 2.0»): переносим каждую идею один раз со сводкой
+  const base = (n) => String(n).replace(/\s+\d+(\.\d+)*$/, '').trim();
+  const groups = new Map();
+  for (const p of S.projects) { if (!p?.name) continue; const k = base(p.name); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); }
   const names = new Set(db.all('SELECT name FROM projects').map((p) => p.name.toLowerCase()));
-  for (const p of S.projects) {
-    if (!p?.name || names.has(String(p.name).toLowerCase())) { res.skipped_projects++; continue; }
-    const closed = p.status && p.status !== 'active';
-    db.run(`INSERT INTO projects(name,stage,owner,summary,roi,stage_since) VALUES(?,?,?,?,?,datetime('now'))`, String(p.name).slice(0, 200), closed ? 'closed' : 'idea', p.owner || null,
-      `Перенесено из симулятора (день ${p.created ?? '?'}): там этап «${SIM_STAGES[p.stage] || p.stage}», статус ${p.status || '—'}, ROI ${p.roi ?? '—'}%. Цифры симулятора модельные — перед работой проверить спрос по-настоящему.`, null);
-    names.add(String(p.name).toLowerCase()); res.projects++;
+  for (const [name, ps] of groups) {
+    if (names.has(name.toLowerCase())) { res.skipped_projects += ps.length; continue; }
+    const active = ps.filter((p) => p.status === 'active'), live = ps.filter((p) => p.stage === 6), best = Math.max(...ps.map((p) => Number(p.roi) || 0));
+    db.run(`INSERT INTO projects(name,stage,owner,summary,roi,stage_since) VALUES(?,?,?,?,?,datetime('now'))`, name.slice(0, 200), active.length ? 'idea' : 'closed', ps[0].owner || null,
+      `Перенесено из симулятора: запусков ${ps.length}, дошли до «дохода» ${live.length}, отклонено ${ps.filter((p) => p.status !== 'active').length}, лучший ROI ${best}%. Цифры симулятора модельные — перед работой проверить спрос по-настоящему (тест спроса).`, null);
+    names.add(name.toLowerCase()); res.projects++;
   }
   const doc = (title, kind, content) => { db.run('INSERT INTO documents(title,kind,content,agent_id) VALUES(?,?,?,?)', String(title).slice(0, 200), kind, String(content).slice(0, 200000), 'sim_import'); res.documents++; };
   for (const d of S.plans || []) doc(`[симулятор] ${d.title || 'Документ'}`, 'plan', str(d.text || d.body || d.content || d, 200000));

@@ -145,12 +145,12 @@ test('архив: импорт симулятора переносит идеи 
   const { makeApp } = await import('./helpers.js');
   const { importSimulator, exportCompany } = await import('../src/archive.js');
   const app = makeApp();
-  const arc = { savedAt: '2026-11-19T07:00:00Z', S: { day: 12, projects: [{ id: 1, name: 'ИИ-юрист для фрилансеров', stage: 6, status: 'active', roi: 180, created: 3 }, { id: 2, name: 'Генератор меню', stage: 1, status: 'rejected' }],
+  const arc = { savedAt: '2026-11-19T07:00:00Z', S: { day: 12, projects: [{ id: 1, name: 'ИИ-юрист для фрилансеров', stage: 6, status: 'active', roi: 180, created: 3 }, { id: 3, name: 'ИИ-юрист для фрилансеров 2.0', stage: 1, status: 'rejected', roi: 40 }, { id: 2, name: 'Генератор меню', stage: 1, status: 'rejected' }],
     plans: [{ id: 1, title: 'Стратегия развития', text: 'Фокус на B2B' }], meetings: [{ title: 'Планёрка', protocol: 'Решили запускать' }], directives: ['Снизить расходы'] } };
   const r = importSimulator(app.db, arc);
   assert.equal(r.projects, 2); assert.equal(r.documents, 3);
   const p = app.db.get(`SELECT * FROM projects WHERE name='ИИ-юрист для фрилансеров'`);
-  assert.equal(p.stage, 'idea'); assert.match(p.summary, /этап «доход».*модельные/);
+  assert.equal(p.stage, 'idea'); assert.match(p.summary, /запусков 2, дошли до «дохода» 1.*лучший ROI 180%.*модельные/);
   assert.equal(app.db.get(`SELECT stage FROM projects WHERE name='Генератор меню'`).stage, 'closed');
   assert.ok(importSimulator(app.db, arc).skipped, 'повторный импорт пропускается');
   assert.throws(() => importSimulator(app.db, { foo: 1 }), /не архив/);
