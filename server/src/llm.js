@@ -17,7 +17,7 @@ export function createLLM(ctx) {
 
   async function call({ tier = 'worker', system, messages, tools, taskId = null, agentId = null }) {
     if (!cfg.anthropic.apiKey) throw new Error('ANTHROPIC_API_KEY не задан');
-    const model = tier === 'lead' ? cfg.anthropic.modelLead : cfg.anthropic.modelWorker;
+    const model = tier === 'lead' ? cfg.anthropic.modelLead : tier === 'fast' && cfg.anthropic.modelFast ? cfg.anthropic.modelFast : cfg.anthropic.modelWorker;
     const body = { model, max_tokens: cfg.anthropic.maxTokens, system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }], messages };
     if (tools?.length) body.tools = tools;
     let lastErr;

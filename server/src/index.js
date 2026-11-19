@@ -17,9 +17,14 @@ import { applyRates } from './fx.js';
 import { radarConfig } from './radar.js';
 import { createMarketing } from './marketing.js';
 import { createSupport } from './support.js';
+import { autoImport } from './archive.js';
+import { createHR } from './hr.js';
 import { projectBudget } from './policy.js';
 import { adsConfig, socialPublisher } from './ads.js';
 import crypto from 'node:crypto';
+import { createGuard } from './guard.js';
+import { createRouter } from './router.js';
+import { createPlaybooks } from './playbooks.js';
 
 const log = {
   info: (...a) => console.log(new Date().toISOString(), '[info]', ...a),
@@ -38,9 +43,14 @@ export function createApp(cfg, opts = {}) {
   ctx.adsCfg = opts.adsCfg || adsConfig();
   ctx.executors = opts.executors || buildExecutors(cfg, ctx.fetch, { revolut: () => ctx.revolut, revolutCfg: ctx.revolutCfg, adsCfg: ctx.adsCfg, threadsToken: () => db.setting('threads_token') });
   ctx.social = socialPublisher(ctx.adsCfg, ctx.fetch, { crypto, threadsToken: () => db.setting('threads_token') });
+  ctx.guard = createGuard(ctx);
+  ctx.router = createRouter(ctx);
+  ctx.playbooks = createPlaybooks(ctx);
   ctx.actions = createActions(ctx);
   ctx.marketing = createMarketing(ctx, { adsCfg: ctx.adsCfg, platforms: opts.platforms });
   ctx.support = createSupport(ctx);
+  ctx.hr = createHR(ctx);
+  if (!opts.db) autoImport(db, path.join(cfg.dataDir, 'import'), log);
   ctx.projectBudget = (p) => projectBudget(db, p);
   ctx.llm = createLLM(ctx);
   ctx.runtime = createAgentRuntime(ctx);

@@ -22,6 +22,7 @@ const HELP = `Я — связь с вашей компанией.
 /meeting повестка — созвать совещание руководителей
 /marketing — тесты спроса и реклама
 /support — обращения, ошибки, метрики проектов
+/team — эффективность сотрудников за неделю
 /feed all|important|off — сколько событий присылать
 /stop — СТОП всех внешних действий
 /resume — снять СТОП`;
@@ -98,6 +99,8 @@ export function createTelegram(ctx) {
         if (type === 't') { const r = decideAdoption(ctx, Number(id), val === 'y', 'director:telegram'); msg = `«${r.title}»: ${ADOPTION_RU[r.status]}`; }
         if (type === 'm') { const r = ctx.marketing.decideTest(Number(id), val === 'y', 'director:telegram'); msg = `Тест «${r.title}»: ${TEST_RU[r.status]}`; }
         if (type === 'v') { const r = ctx.marketing.decideVerdict(Number(id), val, 'director:telegram'); msg = `Тест «${r.title}»: ${VERDICT_RU[r.decision] || r.decision}`; }
+        if (type === 'g') { const r = ctx.guard.decide(Number(id), val === 'y', 'director:telegram'); msg = r.status === 'released' ? 'Передано сотрудникам с предупреждением' : 'Удалено'; }
+        if (type === 'h') { const r = ctx.hr.decideReplace(Number(id), val === 'y', 'director:telegram'); msg = r.status === 'approved' ? 'Замена выполнена' : 'Сотрудник остаётся'; }
         if (type === 'f') { const r = ctx.support.decideFate(Number(id), val, 'director:telegram'); msg = `Судьба проекта: ${FATE_RU[r.decision] || r.decision}`; }
         if (type === 'q') {
           const q = db.get('SELECT options FROM questions WHERE id=?', Number(id));
@@ -153,6 +156,12 @@ export function createTelegram(ctx) {
         if (!ts.length) return send('📣 Активных тестов спроса нет.');
         return send('📣 Тесты спроса\n\n' + ts.map((t) => `#${t.id} ${t.title}${t.project ? ` (${t.project})` : ''}\n${TEST_RU[t.status]}${t.status === 'running' ? ` · день ${t.day}/${t.days}` : ''} · потрачено ${t.spent}/${t.budget_base} ${cfg.baseCurrency} · заявок ${t.total.leads} · покупок ${t.total.purchases}${t.total.cpl != null ? ` · заявка ${t.total.cpl}` : ''}`).join('\n\n'));
       }
+      case '/team': {
+        const o = ctx.hr.overview();
+        const d = o.depts.map((x) => `${x.name}: ${x.people} чел.${x.on_leave ? `, в отпуске ${x.on_leave}` : ''} · сделано ${x.done}, сбоев ${x.failed} · ${x.cost} ${cfg.baseCurrency}${x.idle ? ` · без задач ${x.idle}` : ''}`).join('\n');
+        const weak = o.agents.filter((a) => a.failed >= 2 || (a.hr_score != null && a.hr_score <= 2.5)).map((a) => `${a.name} (сбоев ${a.failed}, оценка ${a.hr_score ?? '—'})`);
+        return send(`👥 Эффективность за 7 дней\n\n${d || 'данных пока нет'}${weak.length ? '\n\nВнимание HR: ' + weak.join(', ') : ''}${o.hr_enabled ? '' : '\n\nHR-директор выключена — включите Светлану Никитину в «Команде».'}`);
+      }
       case '/support': {
         const o = ctx.support.overview();
         const ps = o.projects.filter((p) => p.metrics).map((p) => `«${p.name}»: выручка 30 дн. ${p.metrics.mrr} ${cfg.baseCurrency}, отток ${p.metrics.churn_pct ?? '—'}%, оценка ${p.metrics.score ?? '—'}`);
@@ -181,7 +190,7 @@ export function createTelegram(ctx) {
     await api('setMyCommands', { commands: [
       { command: 'cabinet', description: 'Кабинет директора' }, { command: 'status', description: 'Цифры компании' },
       { command: 'approvals', description: 'Что ждёт решения' }, { command: 'questions', description: 'Вопросы сотрудников' },
-      { command: 'meeting', description: 'Созвать совещание' }, { command: 'marketing', description: 'Тесты спроса и реклама' }, { command: 'support', description: 'Сопровождение проектов' }, { command: 'feed', description: 'Лента событий' },
+      { command: 'meeting', description: 'Созвать совещание' }, { command: 'marketing', description: 'Тесты спроса и реклама' }, { command: 'support', description: 'Сопровождение проектов' }, { command: 'team', description: 'Эффективность сотрудников' }, { command: 'feed', description: 'Лента событий' },
       { command: 'stop', description: 'СТОП внешних действий' }, { command: 'resume', description: 'Снять СТОП' },
     ] }).catch(() => {});
     if (cabinetUrl) await api('setChatMenuButton', { chat_id: Number(cfg.telegram.directorChatId), menu_button: { type: 'web_app', text: 'Кабинет', web_app: { url: cabinetUrl } } }).catch(() => {});

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 // Хранилище: встроенный SQLite в Node 22 (node:sqlite), режим WAL.
 // Для одного сервера на старте этого достаточно; бэкап — один файл (см. deploy/backup.sh).
 import { DatabaseSync } from 'node:sqlite';
@@ -108,15 +109,41 @@ CREATE TABLE IF NOT EXISTS fate (
 CREATE TABLE IF NOT EXISTS kb_articles (
   id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, title TEXT NOT NULL, body TEXT NOT NULL, topic TEXT, uses INTEGER DEFAULT 0, created_by TEXT,
   created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));
-CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), actor TEXT, event TEXT, data TEXT);
+CREATE TABLE IF NOT EXISTS hr_reviews (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, agent_id TEXT NOT NULL, week TEXT, score INTEGER, verdict TEXT, reason TEXT, coaching TEXT, reviewer TEXT,
+  status TEXT NOT NULL DEFAULT 'applied', replacement_id TEXT, created_at TEXT DEFAULT (datetime('now')), decided_at TEXT);
+CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), actor TEXT, event TEXT, data TEXT, prev TEXT, hash TEXT);
+CREATE TABLE IF NOT EXISTS quarantine (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, route TEXT, sender TEXT, subject TEXT, body TEXT, risk TEXT, flags TEXT, meta TEXT,
+  status TEXT NOT NULL DEFAULT 'held', decided_by TEXT, decided_at TEXT, created_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS playbooks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, dept TEXT, title TEXT NOT NULL, situation TEXT, steps TEXT NOT NULL, tags TEXT, created_by TEXT, source_task INTEGER,
+  uses INTEGER DEFAULT 0, wins INTEGER DEFAULT 0, losses INTEGER DEFAULT 0, version INTEGER DEFAULT 1, status TEXT NOT NULL DEFAULT 'active',
+  last_used TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS model_stats (category TEXT NOT NULL, tier TEXT NOT NULL, wins INTEGER DEFAULT 0, losses INTEGER DEFAULT 0, cost REAL DEFAULT 0, runs INTEGER DEFAULT 0, PRIMARY KEY(category, tier));
 `;
 
-export function openDb(file) {
+// Ключ подписи журнала: AUDIT_KEY из окружения или файл audit.key рядом с базой (создаётся один раз, права 600).
+// Без ключа подделать запись так, чтобы проверка не заметила, нельзя. Ключ хранится в резервной копии вместе с базой.
+function auditKey(file, given) {
+  if (given) return given;
+  if (process.env.AUDIT_KEY) return process.env.AUDIT_KEY;
+  if (file === ':memory:') return crypto.randomBytes(32).toString('hex');
+  const kf = path.join(path.dirname(file), 'audit.key');
+  try { return fs.readFileSync(kf, 'utf8').trim(); } catch {}
+  const k = crypto.randomBytes(32).toString('hex');
+  fs.writeFileSync(kf, k + '\n', { mode: 0o600 });
+  return k;
+}
+export const auditHash = (key, prev, row) => crypto.createHmac('sha256', key).update([prev || '', row.ts, row.actor, row.event, row.data].join('\u241E')).digest('hex');
+
+export function openDb(file, opts = {}) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   const raw = new DatabaseSync(file);
   raw.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
   raw.exec(SCHEMA);
-  try { raw.exec('ALTER TABLE projects ADD COLUMN stage_since TEXT'); } catch {} // миграция для старых баз
+  for (const m of ['ALTER TABLE audit ADD COLUMN prev TEXT', 'ALTER TABLE audit ADD COLUMN hash TEXT', 'ALTER TABLE tasks ADD COLUMN tier TEXT', 'ALTER TABLE tasks ADD COLUMN route_cat TEXT', 'ALTER TABLE tasks ADD COLUMN playbooks TEXT', 'ALTER TABLE projects ADD COLUMN stage_since TEXT', 'ALTER TABLE agents ADD COLUMN on_leave INTEGER DEFAULT 0', 'ALTER TABLE agents ADD COLUMN leave_since TEXT']) { try { raw.exec(m); } catch {} } // миграции для старых баз
+  const AK = auditKey(file, opts.auditKey);
   const cache = new Map();
   const st = (sql) => { let s = cache.get(sql); if (!s) { s = raw.prepare(sql); cache.set(sql, s); } return s; };
   const db = {
@@ -127,7 +154,30 @@ export function openDb(file) {
     tx(fn) { raw.exec('BEGIN IMMEDIATE'); try { const r = fn(); raw.exec('COMMIT'); return r; } catch (e) { raw.exec('ROLLBACK'); throw e; } },
     setting(key, def = null) { const r = st('SELECT value FROM settings WHERE key=?').get(key); return r ? JSON.parse(r.value) : def; },
     setSetting(key, value) { st('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, JSON.stringify(value)); },
-    audit(actor, event, data) { st('INSERT INTO audit(actor,event,data) VALUES(?,?,?)').run(actor, event, JSON.stringify(data ?? null)); },
+    // Журнал — цепочка: каждая запись подписана HMAC вместе с подписью предыдущей. Изменение, удаление
+    // или вставка задним числом ломает цепочку, и verifyAudit() показывает, где именно.
+    audit(actor, event, data) {
+      const row = { ts: new Date().toISOString().slice(0, 19).replace('T', ' '), actor: String(actor ?? ''), event: String(event ?? ''), data: JSON.stringify(data ?? null) };
+      const prev = st('SELECT hash FROM audit WHERE hash IS NOT NULL ORDER BY id DESC LIMIT 1').get()?.hash || '';
+      st('INSERT INTO audit(ts,actor,event,data,prev,hash) VALUES(?,?,?,?,?,?)').run(row.ts, row.actor, row.event, row.data, prev, auditHash(AK, prev, row));
+    },
+    verifyAudit() {
+      let prev = '', n = 0, started = false;
+      for (const r of raw.prepare('SELECT id,ts,actor,event,data,prev,hash FROM audit ORDER BY id').iterate()) {
+        if (!r.hash) { if (started) return { ok: false, checked: n, broken_at: r.id, reason: 'запись без подписи внутри цепочки' }; continue; } // старые записи до включения подписи
+        started = true;
+        if ((r.prev || '') !== prev) return { ok: false, checked: n, broken_at: r.id, reason: 'разрыв цепочки: перед этой записью что-то удалено или вставлено' };
+        if (auditHash(AK, prev, r) !== r.hash) return { ok: false, checked: n, broken_at: r.id, reason: 'запись изменена после создания' };
+        prev = r.hash; n++;
+      }
+      // «якоря» — отпечатки, которые раз в день уходят директору в Telegram: так видно и удаление хвоста журнала
+      for (const a of this.setting('audit_anchors', [])) {
+        const r = st('SELECT hash FROM audit WHERE id=?').get(a.id);
+        if (!r || r.hash !== a.hash) return { ok: false, checked: n, broken_at: a.id, reason: `запись с отпечатком от ${a.date} удалена или изменена` };
+      }
+      const last = st('SELECT id FROM audit WHERE hash IS NOT NULL ORDER BY id DESC LIMIT 1').get();
+      return { ok: true, checked: n, head: prev ? prev.slice(0, 16) : null, last_id: last?.id ?? null };
+    },
     feed(icon, text, agentId = null, level = 'info') { st('INSERT INTO feed(icon,agent_id,text,level) VALUES(?,?,?,?)').run(icon, agentId, String(text).slice(0, 2000), level); },
     close: () => raw.close(),
   };

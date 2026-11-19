@@ -14,12 +14,13 @@ import { updateRates } from './fx.js';
 import { collect, decideAdoption, ADOPTION_RU, dailyRadarTask } from './radar.js';
 import { verifyInitData } from './tgauth.js';
 import { SOCIAL, socialRights, RIGHTS_RU } from './ads.js';
+import { importSimulator, exportCompany } from './archive.js';
 import { answerQuestion, giveOrder, createMeeting, meetingsView, heads } from './director.js';
 
 const MAX_BODY = 1_000_000;
-const readBody = (req) => new Promise((res, rej) => {
+const readBody = (req, max = MAX_BODY) => new Promise((res, rej) => {
   let size = 0; const chunks = [];
-  req.on('data', (c) => { size += c.length; if (size > MAX_BODY) { rej(new Error('too large')); req.destroy(); } else chunks.push(c); });
+  req.on('data', (c) => { size += c.length; if (size > max) { rej(new Error('too large')); req.destroy(); } else chunks.push(c); });
   req.on('end', () => res(Buffer.concat(chunks).toString('utf8'))); req.on('error', rej);
 });
 const send = (res, code, data, type = 'application/json; charset=utf-8') => {
@@ -109,6 +110,22 @@ export function createHttp(ctx) {
     db.feed('🔑', `Права агентов: «${SOCIAL[b.network].title}» — ${RIGHTS_RU[b.right]}`);
     return socialView();
   });
+  // ---- эффективность сотрудников ----
+  R('GET', /^\/api\/hr$/, () => ctx.hr.overview());
+  R('POST', /^\/api\/hr\/leave\/([\w-]+)$/, (q, m, b) => ctx.hr.sendOnLeave(m[1], 'director:panel', b.reason || 'решение директора'));
+  R('POST', /^\/api\/hr\/recall\/([\w-]+)$/, (q, m) => ({ ok: ctx.hr.recall(m[1], 'вызван директором') }));
+  // ---- опыт компании, выбор моделей, защита, целостность журнала ----
+  R('GET', /^\/api\/playbooks$/, (q) => ctx.playbooks.list({ status: q.status || 'active' }));
+  R('POST', /^\/api\/playbooks\/(\d+)$/, (q, m, b) => ctx.playbooks.setStatus(Number(m[1]), b.status, 'director:panel'));
+  R('GET', /^\/api\/routing$/, () => ctx.router.overview());
+  R('POST', /^\/api\/routing$/, (q, m, b) => { if (!['learn', 'fixed'].includes(b.mode)) throw new Error('Режим: learn или fixed'); db.setSetting('routing_mode', b.mode); db.audit('director:panel', 'routing.mode', { mode: b.mode }); return ctx.router.overview(); });
+  R('GET', /^\/api\/guard$/, (q) => ctx.guard.list(q.status || 'held'));
+  R('POST', /^\/api\/guard\/(\d+)\/(release|drop)$/, (q, m) => ctx.guard.decide(Number(m[1]), m[2] === 'release', 'director:panel'));
+  R('GET', /^\/api\/audit\/verify$/, () => db.verifyAudit());
+  R('POST', /^\/api\/hr\/replace\/(\d+)$/, (q, m, b) => ctx.hr.decideReplace(Number(m[1]), !!b.approve, 'director:panel'));
+  // ---- сохранность наработок ----
+  R('POST', /^\/api\/import\/simulator$/, (q, m, b) => importSimulator(db, b, 'director:panel'));
+  R('GET', /^\/api\/export$/, () => { db.audit('director:panel', 'archive.export', {}); return exportCompany(db); });
   // ---- сопровождение проектов ----
   R('GET', /^\/api\/support$/, () => ctx.support.overview());
   R('POST', /^\/api\/support\/fate\/(\d+)$/, (q, m, b) => ctx.support.decideFate(Number(m[1]), b.decision, 'director:panel'));
@@ -139,7 +156,7 @@ export function createHttp(ctx) {
     db.setSetting('bank_polled_at', Date.now());
     return { added, ...rec, fx: !!fx };
   });
-  R('GET', /^\/api\/overview$/, () => ({ ...dailyMetrics(db, cfg), balances: balances(), questions_open: db.get(`SELECT COUNT(*) n FROM questions WHERE status='open'`).n, meetings_active: db.get(`SELECT COUNT(*) n FROM meetings WHERE status!='done'`).n, bank_unmatched: db.get(`SELECT COUNT(*) n FROM bank_tx WHERE status='unmatched'`).n, adoptions_waiting: db.get(`SELECT COUNT(*) n FROM adoptions WHERE status IN ('proposed','pilot_done')`).n, marketing_waiting: db.get(`SELECT COUNT(*) n FROM mk_tests WHERE status='proposed' OR (status='done' AND decision IS NULL)`).n, marketing_running: db.get(`SELECT COUNT(*) n FROM mk_tests WHERE status='running'`).n, support_waiting: db.get(`SELECT (SELECT COUNT(*) FROM fate WHERE proposal IS NOT NULL AND decision IS NULL) + (SELECT COUNT(*) FROM tickets WHERE first_response_at IS NULL AND status NOT IN ('solved','closed') AND first_due<=datetime('now')) + (SELECT COUNT(*) FROM bugs WHERE level='P0' AND status NOT IN ('fixed','wontfix')) n`).n, paused: db.setting('paused', false), warnings: configWarnings(cfg), limits: cfg.limits, base: cfg.baseCurrency, telegram: !!ctx.telegram?.enabled }));
+  R('GET', /^\/api\/overview$/, () => ({ ...dailyMetrics(db, cfg), balances: balances(), questions_open: db.get(`SELECT COUNT(*) n FROM questions WHERE status='open'`).n, meetings_active: db.get(`SELECT COUNT(*) n FROM meetings WHERE status!='done'`).n, bank_unmatched: db.get(`SELECT COUNT(*) n FROM bank_tx WHERE status='unmatched'`).n, adoptions_waiting: db.get(`SELECT COUNT(*) n FROM adoptions WHERE status IN ('proposed','pilot_done')`).n, marketing_waiting: db.get(`SELECT COUNT(*) n FROM mk_tests WHERE status='proposed' OR (status='done' AND decision IS NULL)`).n, marketing_running: db.get(`SELECT COUNT(*) n FROM mk_tests WHERE status='running'`).n, hr_waiting: db.get(`SELECT COUNT(*) n FROM hr_reviews WHERE status='proposed'`).n, guard_waiting: db.get(`SELECT COUNT(*) n FROM quarantine WHERE status='held'`).n, support_waiting: db.get(`SELECT (SELECT COUNT(*) FROM fate WHERE proposal IS NOT NULL AND decision IS NULL) + (SELECT COUNT(*) FROM tickets WHERE first_response_at IS NULL AND status NOT IN ('solved','closed') AND first_due<=datetime('now')) + (SELECT COUNT(*) FROM bugs WHERE level='P0' AND status NOT IN ('fixed','wontfix')) n`).n, paused: db.setting('paused', false), warnings: configWarnings(cfg), limits: cfg.limits, base: cfg.baseCurrency, telegram: !!ctx.telegram?.enabled }));
   R('GET', /^\/api\/actions$/, (q) => db.all(`SELECT a.*, g.name agent_name FROM actions a LEFT JOIN agents g ON g.id=a.agent_id WHERE (?='' OR a.status=?) ORDER BY a.id DESC LIMIT 200`, q.status || '', q.status || '').map((a) => ({ ...a, payload: J(a.payload, {}), result: J(a.result) })));
   R('GET', /^\/api\/projects$/, () => db.all(`SELECT p.*, (SELECT COALESCE(SUM(amount_base),0) FROM ledger l WHERE l.project_id=p.id AND l.direction='in') revenue FROM projects p ORDER BY p.id DESC`));
   R('GET', /^\/api\/tasks$/, (q) => db.all(`SELECT t.id,t.title,t.status,t.dept,t.agent_id,g.name agent_name,t.priority,t.created_by,t.project_id,t.created_at,t.finished_at,substr(t.result,1,600) result,t.error FROM tasks t LEFT JOIN agents g ON g.id=t.agent_id WHERE (?='' OR t.status=?) ORDER BY t.id DESC LIMIT 200`, q.status || '', q.status || ''));
@@ -195,6 +212,7 @@ export function createHttp(ctx) {
     try {
       if (req.method === 'GET' && p === '/health') return send(res, 200, { ok: true });
       if (req.method === 'GET' && (p === '/' || p === '/panel')) return send(res, 200, panel(), 'text/html; charset=utf-8');
+      if (req.method === 'GET' && p === '/office.js') { res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' }); return res.end(fs.readFileSync(path.join(cfg.root, 'public', 'office.js'), 'utf8')); }
       if (req.method === 'GET' && (p === '/tg' || p === '/tg/')) return send(res, 200, fs.readFileSync(path.join(cfg.root, 'public', 'miniapp.html'), 'utf8'), 'text/html; charset=utf-8');
       if (req.method === 'GET' && p === '/paid') return send(res, 200, '<!doctype html><meta charset="utf-8"><title>Спасибо</title><body style="font-family:sans-serif;padding:40px">Спасибо! Оплата обрабатывается — подтверждение придёт на почту.</body>', 'text/html; charset=utf-8');
 
@@ -267,7 +285,7 @@ export function createHttp(ctx) {
         if (!a) return send(res, 401, { error: 'Нужен токен директора' });
         const r = routes.find((x) => x.method === req.method && x.re.test(p));
         if (!r) return send(res, 404, { error: 'not found' });
-        const body = ['POST', 'PATCH'].includes(req.method) ? JSON.parse((await readBody(req)) || '{}') : {};
+        const body = ['POST', 'PATCH'].includes(req.method) ? JSON.parse((await readBody(req, p === '/api/import/simulator' ? 30e6 : MAX_BODY)) || '{}') : {};
         const out = await r.fn(Object.fromEntries(url.searchParams), p.match(r.re), body);
         return send(res, 200, out ?? null);
       }

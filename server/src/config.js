@@ -34,9 +34,13 @@ export function buildConfig(env = process.env) {
       baseUrl: env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com',
       modelWorker: env.MODEL_WORKER || 'claude-sonnet-5-5',
       modelLead: env.MODEL_LEAD || 'claude-opus-5-5',
+      // Быстрая модель для рутины. Пустое значение (MODEL_FAST=) — не использовать её вовсе.
+      modelFast: env.MODEL_FAST ?? 'claude-haiku-5-5',
+      // learn — сервер сам подбирает модель по результатам; fixed — руководители на старшей, остальные на основной
+      routing: env.MODEL_ROUTING || 'learn',
       // Цены за 1 млн токенов в USD. ОБЯЗАТЕЛЬНО сверьте с https://www.anthropic.com/pricing перед запуском.
-      priceIn: { worker: num(env.PRICE_IN_WORKER, 3), lead: num(env.PRICE_IN_LEAD, 15) },
-      priceOut: { worker: num(env.PRICE_OUT_WORKER, 15), lead: num(env.PRICE_OUT_LEAD, 75) },
+      priceIn: { fast: num(env.PRICE_IN_FAST, 1), worker: num(env.PRICE_IN_WORKER, 3), lead: num(env.PRICE_IN_LEAD, 15) },
+      priceOut: { fast: num(env.PRICE_OUT_FAST, 5), worker: num(env.PRICE_OUT_WORKER, 15), lead: num(env.PRICE_OUT_LEAD, 75) },
       // Веб-поиск Claude: цена за 1000 запросов в USD (сверьте на anthropic.com/pricing)
       priceWebSearch: num(env.PRICE_WEB_SEARCH, 10),
       maxTokens: num(env.LLM_MAX_TOKENS, 2048),
@@ -69,6 +73,7 @@ export function configWarnings(c) {
   const w = [];
   if (!c.directorToken || c.directorToken.length < 24) w.push('DIRECTOR_TOKEN не задан или короче 24 символов — пульт директора закрыт.');
   if (!c.anthropic.apiKey) w.push('ANTHROPIC_API_KEY не задан — агенты не будут работать.');
+  if (!process.env.AUDIT_KEY) w.push('AUDIT_KEY не задан — ключ подписи журнала лежит в data/audit.key; сохраните его копию отдельно от сервера.');
   if (!c.telegram.token) w.push('TELEGRAM_BOT_TOKEN не задан — подтверждения только через пульт.');
   if (!c.stripe.secretKey) w.push('Stripe не настроен.');
   if (c.stripe.secretKey && !c.stripe.webhookSecret) w.push('STRIPE_WEBHOOK_SECRET не задан — вебхуки Stripe будут отклоняться.');
