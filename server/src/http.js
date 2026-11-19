@@ -204,6 +204,7 @@ export function createHttp(ctx) {
     try {
       if (req.method === 'GET' && p === '/health') return send(res, 200, { ok: true });
       if (req.method === 'GET' && (p === '/' || p === '/panel')) return send(res, 200, panel(), 'text/html; charset=utf-8');
+      if (req.method === 'GET' && p === '/office.js') { res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' }); return res.end(fs.readFileSync(path.join(cfg.root, 'public', 'office.js'), 'utf8')); }
       if (req.method === 'GET' && (p === '/tg' || p === '/tg/')) return send(res, 200, fs.readFileSync(path.join(cfg.root, 'public', 'miniapp.html'), 'utf8'), 'text/html; charset=utf-8');
       if (req.method === 'GET' && p === '/paid') return send(res, 200, '<!doctype html><meta charset="utf-8"><title>Спасибо</title><body style="font-family:sans-serif;padding:40px">Спасибо! Оплата обрабатывается — подтверждение придёт на почту.</body>', 'text/html; charset=utf-8');
 
