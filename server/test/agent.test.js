@@ -39,7 +39,7 @@ test('агент выполняет задачу: документ, делеги
   assert.deepEqual(acts.map((a) => a.status), ['executed', 'pending']);
   assert.equal(db.get('SELECT COUNT(*) n FROM runs').n, 4);
   assert.ok(db.get('SELECT SUM(cost_base) s FROM runs').s > 0);
-  // руководитель отдела работает на «старшей» модели, системный промпт содержит правила
+  // поручение директора руководителю — на «старшей» модели, системный промпт содержит правила
   assert.equal(seen[0].model, app.cfg.anthropic.modelLead);
   assert.match(seen[0].system[0].text, /только через propose_action/);
 });

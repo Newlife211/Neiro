@@ -22,6 +22,9 @@ import { createHR } from './hr.js';
 import { projectBudget } from './policy.js';
 import { adsConfig, socialPublisher } from './ads.js';
 import crypto from 'node:crypto';
+import { createGuard } from './guard.js';
+import { createRouter } from './router.js';
+import { createPlaybooks } from './playbooks.js';
 
 const log = {
   info: (...a) => console.log(new Date().toISOString(), '[info]', ...a),
@@ -40,6 +43,9 @@ export function createApp(cfg, opts = {}) {
   ctx.adsCfg = opts.adsCfg || adsConfig();
   ctx.executors = opts.executors || buildExecutors(cfg, ctx.fetch, { revolut: () => ctx.revolut, revolutCfg: ctx.revolutCfg, adsCfg: ctx.adsCfg, threadsToken: () => db.setting('threads_token') });
   ctx.social = socialPublisher(ctx.adsCfg, ctx.fetch, { crypto, threadsToken: () => db.setting('threads_token') });
+  ctx.guard = createGuard(ctx);
+  ctx.router = createRouter(ctx);
+  ctx.playbooks = createPlaybooks(ctx);
   ctx.actions = createActions(ctx);
   ctx.marketing = createMarketing(ctx, { adsCfg: ctx.adsCfg, platforms: opts.platforms });
   ctx.support = createSupport(ctx);

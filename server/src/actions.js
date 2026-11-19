@@ -2,6 +2,7 @@
 import crypto from 'node:crypto';
 import { evaluate, KINDS, round2 } from './policy.js';
 import { J } from './db.js';
+import { scanOutbound, redactSecrets } from './guard.js';
 
 export function createActions(ctx) {
   const { db, cfg } = ctx;
@@ -15,7 +16,10 @@ export function createActions(ctx) {
     const key = idemKey || crypto.createHash('sha256').update(JSON.stringify([kind, payload, amount, currency, agentId, taskId])).digest('hex').slice(0, 32);
     const dup = db.get('SELECT id FROM actions WHERE idem_key=?', key);
     if (dup) return get(dup.id);
-    const ev = evaluate(db, cfg, { kind, payload, amount, currency });
+    // Шлюз секретов: ключи, токены и номера карт не уходят наружу ни при каком режиме политики
+    const secrets = scanOutbound(payload);
+    if (secrets.length) payload = redactSecrets(payload);
+    const ev = secrets.length ? { decision: 'deny', reason: `В тексте найден секрет (${secrets.join(', ')}) — отправка запрещена, секрет вырезан`, amountBase: 0 } : evaluate(db, cfg, { kind, payload, amount, currency });
     const status = ev.decision === 'auto' ? 'auto' : ev.decision === 'deny' ? 'denied' : 'pending';
     const cur = (currency || cfg.baseCurrency).toUpperCase();
     const r = db.run(`INSERT INTO actions(task_id,agent_id,kind,payload,amount,currency,amount_base,status,policy_reason,idem_key) VALUES(?,?,?,?,?,?,?,?,?,?)`,
@@ -25,6 +29,7 @@ export function createActions(ctx) {
     const who = agentId ? (db.get('SELECT name FROM agents WHERE id=?', agentId)?.name || agentId) : 'Система';
     if (status === 'pending') { db.feed('⏳', `${who}: «${KINDS[kind].title}» ждёт решения директора — ${ev.reason}`, agentId, 'warn'); emit('pending', a); }
     if (status === 'denied') db.feed('⛔', `${who}: действие «${kind}» отклонено политикой — ${ev.reason}`, agentId, 'bad');
+    if (secrets.length) { db.audit('guard', 'guard.secret_blocked', { action: a.id, kind, agent: agentId, found: secrets }); ctx.notify?.(`🛡 ${who} пытался(ась) отправить наружу секрет (${secrets.join(', ')}) в действии «${KINDS[kind]?.title || kind}». Отправка запрещена, секрет вырезан из базы. Проверьте, откуда он у агента, и при необходимости смените ключ.`); }
     if (status === 'auto') return execute(a.id);
     return a;
   }

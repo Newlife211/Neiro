@@ -19,14 +19,28 @@ export function createWorker(ctx) {
     });
   }
 
+  // Обучение: итог задачи → статистика моделей по категориям и доверие к подсказанным приёмам
+  function learn(id, success, final = true) {
+    try {
+      const row = db.get('SELECT tier, route_cat, playbooks, attempts FROM tasks WHERE id=?', id);
+      if (!row?.tier) return;
+      const cost = db.get('SELECT COALESCE(SUM(cost_base),0) c FROM runs WHERE task_id=?', id).c;
+      ctx.router?.outcome(row.route_cat, row.tier, success, cost);
+      if (success || final) ctx.playbooks?.judge(JSON.parse(row.playbooks || '[]'), success);
+    } catch (e) { ctx.log?.error('learn', e.message); }
+  }
+
   async function processTask(t) {
     try {
       const { agent, result } = await runtime.runTask(t);
+      learn(t.id, true);
       db.run(`UPDATE tasks SET status='done', result=?, finished_at=datetime('now') WHERE id=?`, result.slice(0, 20000), t.id);
       db.feed('✅', `${agent.name} выполнил(а) «${t.title}»`, agent.id, 'good');
       if (t.created_by === 'director' || t.created_by === 'system:notify') ctx.notify?.(t.created_by === 'director' ? `✅ ${agent.name} выполнил(а) ваше поручение «${t.title}»:\n\n${result.slice(0, 1500)}` : `🛰 ${t.title} — ${agent.name}\n\n${result.slice(0, 1800)}`);
     } catch (e) {
       const msg = String(e.message || e).slice(0, 1000);
+      // сбои самого API (перегрузка, сеть) и бюджет — не вина модели и приёма, учёбу не трогаем
+      if (!e.budget && !/^Claude API|ANTHROPIC_API_KEY/.test(msg)) learn(t.id, false, t.attempts >= 3);
       if (e.budget) {
         db.run(`UPDATE tasks SET status='blocked', error=? WHERE id=?`, msg, t.id);
         if (!db.setting('budget_alert_' + new Date().toISOString().slice(0, 10))) { db.setSetting('budget_alert_' + new Date().toISOString().slice(0, 10), true); ctx.notify?.('⏸ ' + msg + '. Агенты на паузе до завтра или до увеличения лимита.'); }

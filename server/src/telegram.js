@@ -99,6 +99,7 @@ export function createTelegram(ctx) {
         if (type === 't') { const r = decideAdoption(ctx, Number(id), val === 'y', 'director:telegram'); msg = `«${r.title}»: ${ADOPTION_RU[r.status]}`; }
         if (type === 'm') { const r = ctx.marketing.decideTest(Number(id), val === 'y', 'director:telegram'); msg = `Тест «${r.title}»: ${TEST_RU[r.status]}`; }
         if (type === 'v') { const r = ctx.marketing.decideVerdict(Number(id), val, 'director:telegram'); msg = `Тест «${r.title}»: ${VERDICT_RU[r.decision] || r.decision}`; }
+        if (type === 'g') { const r = ctx.guard.decide(Number(id), val === 'y', 'director:telegram'); msg = r.status === 'released' ? 'Передано сотрудникам с предупреждением' : 'Удалено'; }
         if (type === 'h') { const r = ctx.hr.decideReplace(Number(id), val === 'y', 'director:telegram'); msg = r.status === 'approved' ? 'Замена выполнена' : 'Сотрудник остаётся'; }
         if (type === 'f') { const r = ctx.support.decideFate(Number(id), val, 'director:telegram'); msg = `Судьба проекта: ${FATE_RU[r.decision] || r.decision}`; }
         if (type === 'q') {

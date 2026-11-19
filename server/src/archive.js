@@ -51,7 +51,7 @@ export function autoImport(db, dir, log) {
 }
 
 // Архив компании для скачивания директором: всё, что сделали сотрудники, без ключей и служебных настроек
-const EXPORT_TABLES = ['agents', 'projects', 'tasks', 'documents', 'memory', 'ledger', 'actions', 'payment_links', 'questions', 'meetings', 'radar_items', 'adoptions',
+const EXPORT_TABLES = ['playbooks', 'model_stats', 'agents', 'projects', 'tasks', 'documents', 'memory', 'ledger', 'actions', 'payment_links', 'questions', 'meetings', 'radar_items', 'adoptions',
   'mk_tests', 'mk_campaigns', 'mk_metrics', 'tickets', 'bugs', 'backlog', 'releases', 'surveys', 'project_metrics', 'fate', 'kb_articles', 'hr_reviews'];
 export function exportCompany(db) {
   const out = { exported_at: new Date().toISOString(), format: 'neurosfera-archive-1', tables: {} };
