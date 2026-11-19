@@ -88,6 +88,7 @@ input,textarea,select{font-family:inherit;font-size:13px;color:var(--ink);backgr
   <button id="hireBtn" class="gold">＋ Нанять</button>
   <button id="orgBtn">🏛 Структура</button>
   <button id="cfgBtn" onclick="openCfg()">⚙ Настройки</button>
+  <button id="cloudBtn" title="Сохранность наработок: облачная копия и архив">☁</button>
   <button id="resetBtn" title="Начать симуляцию заново">⟲</button>
 </header>
 <main>
@@ -546,6 +547,36 @@ function hud(){document.getElementById('clock').textContent=hhmm(S.min);document
  document.getElementById('rpd').textContent=fmt(S.projects.filter(p=>p.status==='active'&&p.stage===6).reduce((s,p)=>s+p.rev,0));
  updBadges();if(tab==='meet'&&S.meeting)updateMeet();if(tab==='dept'&&++deptTick%4===0)renderDept();const live=agents.filter(a=>!a.fired);document.getElementById('avgk').textContent=Math.round(live.reduce((s,a)=>s+a.kpi,0)/live.length)}
 setInterval(()=>{if(S)save()},20000);
+// ---- Сохранность наработок: копия в облачной базе артефакта (не только в этом браузере) и архив файлом ----
+const CLOUD={db:null,dl:null,last:0,lastLen:0,busy:false,savedAt:null,err:null,remote:null,docHash:{}};
+const CHUNK=90000; // символов на документ: < 256 КиБ даже для кириллицы
+function snapshot(){return JSON.stringify({ver:1,savedAt:new Date().toISOString(),S,agents:agents.map(a=>{const o={...a};delete o.path;delete o.bubble;delete o.onArrive;delete o.deliver;return o}),uid})}
+const cut=(x,n)=>{const t=typeof x==='string'?x:JSON.stringify(x);return String(t||'').slice(0,n)};
+function resultsSummary(){return{ver:1,savedAt:new Date().toISOString(),day:S.day,
+ projects:S.projects.slice(0,300).map(p=>({id:p.id,name:p.name,stage:p.stage,status:p.status,roi:p.roi,rev:p.rev,owner:p.owner,created:p.created})),
+ meetings:(S.meetings||[]).slice(-30).map(m=>({title:cut(m.title||m.topic,200),day:m.day,protocol:cut(m.protocol||m.summary||m,3000)})),
+ directives:(S.directives||[]).slice(-60).map(d=>cut(d,600)),statements:(S.statements||[]).slice(-20).map(d=>cut(d,1500)),
+ dev:S.dev?(S.dev.reports||[]).slice(-10).map(r=>cut(r,4000)):[],
+ team:agents.map(a=>({id:a.id,name:a.name,role:a.role,dept:a.dept,kpi:a.kpi,hidden:!!a.hidden}))}}
+const docVal=s=>s&&s.exists?s.data():null;
+async function cloudInit(){try{if(!window.claude||!claude.use)return;CLOUD.db=await claude.use('db');CLOUD.dl=await claude.use('downloads');if(!CLOUD.db)return;
+ const m=docVal(await CLOUD.db.doc('backup/meta').get().catch(()=>null));CLOUD.remote=m&&m.parts?m:null;
+ let local=null;try{local=localStorage.getItem('neurosfera-v1')}catch(e){}
+ if(!local&&CLOUD.remote)modal('<h3>Найдена облачная копия офиса</h3><p class="note">Сохранена '+new Date(CLOUD.remote.savedAt).toLocaleString('ru-RU')+', день '+CLOUD.remote.day+'. В этом браузере сохранения нет. Восстановить?</p><div class="btns"><button onclick="cloudRestore()">Восстановить</button><button onclick="closeModal()">Начать заново</button></div>');
+ else setTimeout(()=>cloudSave(false),15000);
+ setInterval(()=>cloudSave(false),120000)}catch(e){CLOUD.err=String(e&&e.message||e)}}
+async function cloudSave(force){if(!CLOUD.db||CLOUD.busy||!S)return;const js=snapshot();if(!force&&js.length===CLOUD.lastLen&&Date.now()-CLOUD.last<600000)return;
+ CLOUD.busy=true;try{const parts=Math.ceil(js.length/CHUNK);for(let i=0;i<parts;i++)await CLOUD.db.doc('backup/p'+i).set({i,data:js.slice(i*CHUNK,(i+1)*CHUNK)});
+  const meta={parts,size:js.length,day:S.day,savedAt:new Date().toISOString(),ver:1};await CLOUD.db.doc('backup/meta').set(meta);
+  await CLOUD.db.doc('export/summary').set(JSON.parse(JSON.stringify(resultsSummary())));
+  for(const d of (S.plans||[])){const body={id:d.id,key:d.key||null,title:cut(d.title,300),created:d.created||null,text:cut(d.text||d.body||d.content||d,60000)};const h=JSON.stringify(body).length+':'+body.title;if(CLOUD.docHash[d.id]===h)continue;await CLOUD.db.doc('docs/d'+d.id).set(body);CLOUD.docHash[d.id]=h}
+  CLOUD.remote=meta;CLOUD.last=Date.now();CLOUD.lastLen=js.length;CLOUD.savedAt=meta.savedAt;CLOUD.err=null}catch(e){CLOUD.err=String(e&&(e.message||e.code)||e)}finally{CLOUD.busy=false}}
+async function cloudRestore(){try{const m=CLOUD.remote;let js='';for(let i=0;i<m.parts;i++){const d=docVal(await CLOUD.db.doc('backup/p'+i).get());if(!d)throw new Error('нет части '+i);js+=d.data}
+ JSON.parse(js);localStorage.setItem('neurosfera-v1',js);closeModal();location.reload()}catch(e){alert('Не удалось восстановить: '+(e&&e.message||e))}}
+async function archiveDownload(){if(!CLOUD.dl){alert('Скачивание здесь недоступно');return}try{await CLOUD.dl.save({filename:'neurosfera-archive-day'+S.day+'.json',data:snapshot()})}catch(e){}}
+document.getElementById('cloudBtn').onclick=()=>{const t=CLOUD.savedAt||(CLOUD.remote&&CLOUD.remote.savedAt);modal('<h3>☁ Сохранность наработок</h3><p class="note">Офис сохраняется в этом браузере каждые 20 секунд и в облачную копию артефакта каждые 2 минуты. Облачная копия переживёт смену браузера и устройства, из неё же наработки переносятся на боевой сервер.</p><p>'+(CLOUD.db?('Облачная копия: '+(t?new Date(t).toLocaleString('ru-RU'):'ещё не сохранялась')+(CLOUD.err?' · <span style="color:#ff6b6b">ошибка: '+CLOUD.err+'</span>':'')):'Облачная копия недоступна в этом окне — откройте офис в claude.ai.')+'</p><div class="btns">'+(CLOUD.db?'<button onclick="cloudSave(true).then(()=>{closeModal();document.getElementById(\'cloudBtn\').click()})">Сохранить сейчас</button>':'')+(CLOUD.dl?'<button onclick="archiveDownload()">Скачать архив (JSON)</button>':'')+(CLOUD.db&&CLOUD.remote?'<button onclick="if(confirm(\'Заменить текущий офис облачной копией?\'))cloudRestore()">Восстановить из облака</button>':'')+'<button onclick="closeModal()">Закрыть</button></div>')};
+cloudInit();
+
 
 // ====================== ВВОД ======================
 let drag=null;

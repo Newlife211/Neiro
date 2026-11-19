@@ -14,12 +14,13 @@ import { updateRates } from './fx.js';
 import { collect, decideAdoption, ADOPTION_RU, dailyRadarTask } from './radar.js';
 import { verifyInitData } from './tgauth.js';
 import { SOCIAL, socialRights, RIGHTS_RU } from './ads.js';
+import { importSimulator, exportCompany } from './archive.js';
 import { answerQuestion, giveOrder, createMeeting, meetingsView, heads } from './director.js';
 
 const MAX_BODY = 1_000_000;
-const readBody = (req) => new Promise((res, rej) => {
+const readBody = (req, max = MAX_BODY) => new Promise((res, rej) => {
   let size = 0; const chunks = [];
-  req.on('data', (c) => { size += c.length; if (size > MAX_BODY) { rej(new Error('too large')); req.destroy(); } else chunks.push(c); });
+  req.on('data', (c) => { size += c.length; if (size > max) { rej(new Error('too large')); req.destroy(); } else chunks.push(c); });
   req.on('end', () => res(Buffer.concat(chunks).toString('utf8'))); req.on('error', rej);
 });
 const send = (res, code, data, type = 'application/json; charset=utf-8') => {
@@ -109,6 +110,9 @@ export function createHttp(ctx) {
     db.feed('🔑', `Права агентов: «${SOCIAL[b.network].title}» — ${RIGHTS_RU[b.right]}`);
     return socialView();
   });
+  // ---- сохранность наработок ----
+  R('POST', /^\/api\/import\/simulator$/, (q, m, b) => importSimulator(db, b, 'director:panel'));
+  R('GET', /^\/api\/export$/, () => { db.audit('director:panel', 'archive.export', {}); return exportCompany(db); });
   // ---- сопровождение проектов ----
   R('GET', /^\/api\/support$/, () => ctx.support.overview());
   R('POST', /^\/api\/support\/fate\/(\d+)$/, (q, m, b) => ctx.support.decideFate(Number(m[1]), b.decision, 'director:panel'));
@@ -267,7 +271,7 @@ export function createHttp(ctx) {
         if (!a) return send(res, 401, { error: 'Нужен токен директора' });
         const r = routes.find((x) => x.method === req.method && x.re.test(p));
         if (!r) return send(res, 404, { error: 'not found' });
-        const body = ['POST', 'PATCH'].includes(req.method) ? JSON.parse((await readBody(req)) || '{}') : {};
+        const body = ['POST', 'PATCH'].includes(req.method) ? JSON.parse((await readBody(req, p === '/api/import/simulator' ? 30e6 : MAX_BODY)) || '{}') : {};
         const out = await r.fn(Object.fromEntries(url.searchParams), p.match(r.re), body);
         return send(res, 200, out ?? null);
       }
