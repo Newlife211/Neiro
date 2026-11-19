@@ -12,7 +12,7 @@
   - `/feed important` (по умолчанию) — только важное;
   - `/feed off` — только решения.
 - **Утро и вечер:** отчёт директора по развитию, дайджест технологической разведки, итоги дня.
-- **Команды:** `/cabinet`, `/status`, `/approvals`, `/questions`, `/meeting`, `/marketing`, `/support`, `/feed`, `/stop`, `/resume`.
+- **Команды:** `/cabinet`, `/status`, `/approvals`, `/questions`, `/meeting`, `/marketing`, `/support`, `/team`, `/feed`, `/stop`, `/resume`.
 
 Бот принимает команды и нажатия **только из вашего чата**. Сообщения из любых других чатов игнорируются.
 

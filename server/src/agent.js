@@ -5,6 +5,7 @@ import { radarList, radarAssess, proposeAdoption, adoptionUpdate, ADOPTION_RU } 
 import { readUrl } from './webread.js';
 import { askDirector } from './director.js';
 import { CHANNELS } from './ads.js';
+import { recall, recallForDept, agentStats, deptStats } from './hr.js';
 
 export const STAGES = ['idea', 'analysis', 'decision', 'build', 'test', 'launch', 'revenue', 'closed'];
 export const STAGE_RU = { idea: 'Идея', analysis: 'Анализ', decision: 'Решение директора', build: 'Разработка', test: 'Тест', launch: 'Запуск', revenue: 'Доход', closed: 'Закрыт' };
@@ -89,6 +90,17 @@ export function supportTools(agent) {
   if (agent.dept === 'analytics') return pick('project_metrics', 'backlog_list');
   return [];
 }
+// Эффективность сотрудников (HR)
+const HR = {
+  hr_stats: { name: 'hr_stats', description: 'Цифры работы сотрудников и отделов: сделано, сбои, время, стоимость, стоимость задачи, оценка HR.', input_schema: { type: 'object', properties: { days: { type: 'integer' }, dept: { type: 'string' }, agent_id: { type: 'string' } } } },
+  hr_sample: { name: 'hr_sample', description: 'Три последние работы сотрудника с результатами — для оценки качества по сути.', input_schema: { type: 'object', properties: { agent_id: { type: 'string' } }, required: ['agent_id'] } },
+  hr_review: { name: 'hr_review', description: 'Оценка сотрудника: score 1–5 и решение ok | coach (наставление в память сотрудника) | leave (нет задач — отпуск, вернётся сам) | replace (замена — решает директор).', input_schema: { type: 'object', properties: { agent_id: { type: 'string' }, score: { type: 'integer' }, verdict: { type: 'string', enum: ['ok', 'coach', 'leave', 'replace'] }, reason: { type: 'string', description: 'Факты: цифры и примеры работ' }, coaching: { type: 'string', description: 'Что делать иначе — попадёт сотруднику в память' }, replacement_id: { type: 'string' } }, required: ['agent_id', 'score', 'verdict', 'reason'] } },
+};
+export function hrTools(agent) {
+  if (agent.dept === 'hr') return [HR.hr_stats, HR.hr_sample, HR.hr_review];
+  if (['coo', 'cdo'].includes(agent.id) || agent.head) return [HR.hr_stats];
+  return [];
+}
 const RESEARCH_DEPTS = new Set(['tech_radar', 'rnd', 'security', 'analytics']);
 
 export function toolsFor(agent, opts = {}) {
@@ -98,6 +110,7 @@ export function toolsFor(agent, opts = {}) {
   t.push(ADOPTION_TOOL);
   t.push(...marketingTools(agent));
   t.push(...supportTools(agent));
+  t.push(...hrTools(agent));
   if (research) { t.push(READ_URL); if (opts.webSearch !== false) t.push(WEB_SEARCH); }
   return t;
 }
@@ -124,8 +137,9 @@ export function createAgentRuntime(ctx) {
   const name = (id) => agent(id)?.name || id;
 
   function pickAgent(task) {
-    if (task.agent_id) { const a = agent(task.agent_id); if (a?.enabled) return a; }
+    if (task.agent_id) { let a = agent(task.agent_id); if (a && !a.enabled && a.on_leave && recall(db, a.id, `пришла задача «${task.title}»`, ctx.notify)) a = agent(a.id); if (a?.enabled) return a; }
     const dept = task.dept || 'admin';
+    recallForDept(db, dept, ctx.notify);
     const pool = db.all(`SELECT a.*, (SELECT COUNT(*) FROM tasks t WHERE t.agent_id=a.id AND t.status IN ('queued','running')) load FROM agents a WHERE a.enabled=1 AND a.dept=? ORDER BY a.head ASC, load ASC`, dept);
     if (pool.length) return pool.sort((x, y) => x.load - y.load)[0];
     return db.get(`SELECT * FROM agents WHERE enabled=1 AND id='coo'`) || db.get(`SELECT * FROM agents WHERE enabled=1 LIMIT 1`);
@@ -238,6 +252,9 @@ ${mem ? '\nТвоя память:\n' + mem : ''}
           project_metrics: () => { const p = db.get('SELECT * FROM projects WHERE id=?', input.project_id); return p ? { project: p.name, stage: p.stage, ...S.metrics(p.id), budget: projectBudget(db, p) } : { error: 'Нет такого проекта' }; } };
         return map[nameT]();
       }
+      case 'hr_stats': { if (!hrTools(a).length) return { error: 'Не для твоей роли' }; const dept = a.dept === 'hr' || ['coo', 'cdo'].includes(a.id) ? input.dept : a.dept; return { agents: agentStats(db, Math.min(90, input.days || 7), { dept, agent_id: input.agent_id }), depts: dept ? undefined : deptStats(db, input.days || 7) }; }
+      case 'hr_sample': return a.dept === 'hr' ? ctx.hr.sample(input.agent_id) : { error: 'Только HR' };
+      case 'hr_review': return a.dept === 'hr' ? ctx.hr.review(a, input) : { error: 'Только HR' };
       case 'read_url': return readUrl(input.url, { fetchImpl: ctx.fetch || fetch, lookup: ctx.dnsLookup });
       default:
         return { error: 'Неизвестный инструмент' };

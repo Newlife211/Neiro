@@ -108,6 +108,9 @@ CREATE TABLE IF NOT EXISTS fate (
 CREATE TABLE IF NOT EXISTS kb_articles (
   id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, title TEXT NOT NULL, body TEXT NOT NULL, topic TEXT, uses INTEGER DEFAULT 0, created_by TEXT,
   created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS hr_reviews (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, agent_id TEXT NOT NULL, week TEXT, score INTEGER, verdict TEXT, reason TEXT, coaching TEXT, reviewer TEXT,
+  status TEXT NOT NULL DEFAULT 'applied', replacement_id TEXT, created_at TEXT DEFAULT (datetime('now')), decided_at TEXT);
 CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), actor TEXT, event TEXT, data TEXT);
 `;
 
@@ -116,7 +119,7 @@ export function openDb(file) {
   const raw = new DatabaseSync(file);
   raw.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
   raw.exec(SCHEMA);
-  try { raw.exec('ALTER TABLE projects ADD COLUMN stage_since TEXT'); } catch {} // миграция для старых баз
+  for (const m of ['ALTER TABLE projects ADD COLUMN stage_since TEXT', 'ALTER TABLE agents ADD COLUMN on_leave INTEGER DEFAULT 0', 'ALTER TABLE agents ADD COLUMN leave_since TEXT']) { try { raw.exec(m); } catch {} } // миграции для старых баз
   const cache = new Map();
   const st = (sql) => { let s = cache.get(sql); if (!s) { s = raw.prepare(sql); cache.set(sql, s); } return s; };
   const db = {

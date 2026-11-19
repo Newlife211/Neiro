@@ -121,6 +121,7 @@ pre{white-space:pre-wrap;font:13px/1.5 -apple-system,system-ui,sans-serif;margin
       <rect x="18" y="68" width="17" height="15" fill="#efe0d9"/><rect x="37" y="72" width="17" height="15" fill="#e2efd9"/>
       <rect x="22" y="88" width="26" height="12" fill="#f3efe0"/>
       <circle cx="24" cy="47" r="1.6" fill="#d33"/><circle cx="45" cy="49" r="1.6" fill="#3a6"/><circle cx="26" cy="68" r="1.6" fill="#36c"/>
+      <g class="badge" id="b-team" display="none"><circle cx="58" cy="42" r="8" fill="#ff5a5a"/><text id="t-team" x="58" y="45.5" font-size="8.5" font-weight="700" fill="#fff" text-anchor="middle">0</text></g>
       <text class="lbl" x="35" y="120">Команда</text>
     </g>
 
@@ -367,7 +368,7 @@ async function refresh() {
   $('#mRev').textContent = money(ov.revenue_month); $('#mExp').textContent = money(ov.expenses_month);
   $('#mTasks').textContent = `${ov.tasks_done_24h} готово`; $('#mPend').textContent = `${dec} решений`;
   $('#mLine').textContent = ov.stopped ? '🛑 СТОП: внешние действия остановлены' : `траты сегодня ${ov.spend_limits.spent_today} из ${ov.spend_limits.day} ${ov.base}`;
-  badge('decisions', dec); badge('questions', ov.questions_open || 0); badge('tech', ov.adoptions_waiting || 0); badge('money', ov.bank_unmatched || 0); badge('marketing', ov.marketing_waiting || 0); badge('support', ov.support_waiting || 0);
+  badge('decisions', dec); badge('questions', ov.questions_open || 0); badge('tech', ov.adoptions_waiting || 0); badge('money', ov.bank_unmatched || 0); badge('marketing', ov.marketing_waiting || 0); badge('support', ov.support_waiting || 0); badge('team', ov.hr_waiting || 0);
   document.getElementById('b-meetings').setAttribute('display', ov.meetings_active ? 'inline' : 'none');
   const q = ov.questions_open || 0;
   $('#phoneScreen').setAttribute('fill', q ? '#1d3b5c' : '#141a22');
@@ -499,11 +500,17 @@ const V = {
       <div class="k" style="margin:10px 0 6px">Последние операции</div><div class="card">${l.slice(0, 25).map((x) => `<div class="row" style="padding:4px 0;border-bottom:1px dashed var(--l)"><span class="note">${esc(x.ts.slice(5, 10))}</span><span>${esc(x.note || x.category)}</span><span class="sp2"></span><b style="color:${x.direction === 'in' ? 'var(--g)' : 'var(--t)'}">${x.direction === 'in' ? '+' : '−'}${x.amount} ${esc(x.currency)}</b></div>`).join('') || '<span class="note">Пока пусто</span>'}</div>`;
   },
   async team() {
-    const a = await api('/api/agents');
-    return `<p class="note">Включённые сотрудники работают и расходуют Claude API.</p>${a.map((x) => `<div class="card"><div class="row"><b>${esc(x.name)}</b>${x.head ? ' ⭐' : ''}<span class="sp2"></span><label class="note"><input type="checkbox" ${x.enabled ? 'checked' : ''} style="width:auto" onchange="agSet('${x.id}',this.checked)"> в штате</label></div><div class="note">${esc(x.role)} · задач: ${x.done} · ${money(x.cost_month)}</div></div>`).join('')}`;
+    const [a, h] = await Promise.all([api('/api/agents'), api('/api/hr')]);
+    const st = Object.fromEntries(h.agents.map((x) => [x.id, x]));
+    const VR = { ok: 'всё хорошо', coach: 'наставление', leave: 'в отпуск', replace: 'заменить' };
+    return `<p class="note">За эффективность отвечает HR-директор${h.hr_enabled ? '' : ' (сейчас выключена — включите Светлану Никитину ниже)'}: оценка по пятницам, наставления, отпуск без задач с автовозвратом. Замену решаете вы.</p>
+      ${h.proposals.map((p) => `<div class="card"><b>Замена: ${esc(p.name)}</b><div class="note">${p.score}/5 — ${esc(p.reason)}</div><div class="row" style="margin-top:6px"><button class="btn ok" onclick="hrRepl(${p.id},true)">Заменить</button><button class="btn" onclick="hrRepl(${p.id},false)">Оставить</button></div></div>`).join('')}
+      ${a.map((x) => { const s = st[x.id]; const leave = s && s.on_leave; return `<div class="card"><div class="row"><b>${esc(x.name)}</b>${x.head ? ' ⭐' : ''}${leave ? ' 🏖' : ''}<span class="sp2"></span><label class="note"><input type="checkbox" ${x.enabled || leave ? 'checked' : ''} style="width:auto" onchange="agSet('${x.id}',this.checked)"> в штате</label></div><div class="note">${esc(x.role)}${s ? ` · неделя: сделано ${s.done}, сбоев ${s.failed}${s.cost_per_task != null ? `, ${s.cost_per_task} за задачу` : ''}${s.hr_score != null ? ` · оценка HR ${s.hr_score}` : ''}` : ` · задач: ${x.done}`}</div>${leave ? `<button class="btn" style="margin-top:6px" onclick="hrDo('recall','${x.id}')">Вернуть из отпуска</button>` : s && !x.head && !s.open ? `<button class="btn" style="margin-top:6px" onclick="hrDo('leave','${x.id}')">В отпуск</button>` : ''}</div>`; }).join('')}`;
   },
 };
 
+async function hrDo(op, id) { if (op === 'leave' && !(await confirmBox('В отпуск? Вернётся сам, когда появятся задачи.'))) return; haptic(); const r = await post(`/api/hr/${op}/${id}`); toast(r.error || (op === 'leave' ? '🏖 В отпуске' : '🔙 Вернулся')); openSheet('team', true); }
+async function hrRepl(id, ok) { haptic('medium'); await post('/api/hr/replace/' + id, { approve: ok }); toast(ok ? 'Замена выполнена' : 'Остаётся'); openSheet('team', true); refresh(); }
 async function mkDec(id, a) { if (a !== 'reject' && !(await confirmBox(a === 'approve' ? 'Одобрить бюджет теста?' : 'Остановить тест и его рекламу?'))) return; haptic('medium'); await post(`/api/marketing/tests/${id}/${a}`); toast('Готово'); openSheet('marketing', true); refresh(); }
 async function fateDec(id, d) { if (!(await confirmBox('Решение по проекту принято?'))) return; haptic('medium'); await post('/api/support/fate/' + id, { decision: d }); toast('Решение принято'); openSheet('support', true); refresh(); }
 async function setRight(n, r) { haptic(); await post('/api/social', { network: n, right: r }); toast('Права обновлены'); }

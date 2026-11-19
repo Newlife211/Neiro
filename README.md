@@ -25,6 +25,7 @@
 - [docs/DEPLOY.md](docs/DEPLOY.md) — запуск на VPS шаг за шагом
 - [docs/LAUNCH-CHECKLIST.md](docs/LAUNCH-CHECKLIST.md) — что сделать до первых реальных денег
 - [docs/TELEGRAM.md](docs/TELEGRAM.md) — Telegram: поручения, вопросы сотрудников, совещания и мини-приложение «Кабинет директора»
+- [docs/HR.md](docs/HR.md) — эффективность сотрудников: кто следит, оценки, отпуск, замена
 - [docs/SUPPORT.md](docs/SUPPORT.md) — сопровождение проектов: обращения, ошибки, бэклог, релизы, метрики, судьба проекта
 - [docs/MARKETING.md](docs/MARKETING.md) — маркетинг проектов: тесты спроса с бюджетом, реклама Meta/Google, метки, счётчик лендинга, отчёты
 - [docs/TECH-RADAR.md](docs/TECH-RADAR.md) — технологическая разведка: ежедневный мониторинг ИИ и технологий, пилоты и внедрения

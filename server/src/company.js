@@ -139,6 +139,7 @@ export function createScheduler(ctx) {
     ctx.telegram?.forwardFeed?.();
     await finance();
     await ctx.marketing?.tick(hour(), once).catch((e) => ctx.log?.error('marketing', e.message));
+    await ctx.hr?.tick(hour(), once).catch((e) => ctx.log?.error('hr', e.message));
     await ctx.support?.tick(hour(), once).catch((e) => ctx.log?.error('support', e.message));
     const h = hour();
     if (h >= 7) once('radar', () => { radarMorning().catch((e) => ctx.log?.error('radar', e.message)); });

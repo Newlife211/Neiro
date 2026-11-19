@@ -18,6 +18,7 @@ import { radarConfig } from './radar.js';
 import { createMarketing } from './marketing.js';
 import { createSupport } from './support.js';
 import { autoImport } from './archive.js';
+import { createHR } from './hr.js';
 import { projectBudget } from './policy.js';
 import { adsConfig, socialPublisher } from './ads.js';
 import crypto from 'node:crypto';
@@ -42,6 +43,7 @@ export function createApp(cfg, opts = {}) {
   ctx.actions = createActions(ctx);
   ctx.marketing = createMarketing(ctx, { adsCfg: ctx.adsCfg, platforms: opts.platforms });
   ctx.support = createSupport(ctx);
+  ctx.hr = createHR(ctx);
   if (!opts.db) autoImport(db, path.join(cfg.dataDir, 'import'), log);
   ctx.projectBudget = (p) => projectBudget(db, p);
   ctx.llm = createLLM(ctx);
